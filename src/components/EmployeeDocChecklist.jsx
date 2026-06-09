@@ -15,7 +15,7 @@ const STATE_PILL = {
 }
 
 function blankEdit() {
-  return { status: 'pending', issue_date: '', expiry_date: '' }
+  return { status: 'pending', issue_date: '', expiry_date: '', document_number: '' }
 }
 
 function editFromDoc(doc) {
@@ -24,6 +24,7 @@ function editFromDoc(doc) {
         status: doc.status ?? 'pending',
         issue_date: doc.issue_date ?? '',
         expiry_date: doc.expiry_date ?? '',
+        document_number: doc.document_number ?? '',
       }
     : blankEdit()
 }
@@ -80,7 +81,8 @@ export default function EmployeeDocChecklist({ employee, docTypes, userId, onCha
     return (
       orig.status !== cur.status ||
       orig.issue_date !== cur.issue_date ||
-      orig.expiry_date !== cur.expiry_date
+      orig.expiry_date !== cur.expiry_date ||
+      orig.document_number !== cur.document_number
     )
   }
 
@@ -133,25 +135,42 @@ export default function EmployeeDocChecklist({ employee, docTypes, userId, onCha
                   <option value="verified">Verified</option>
                 </select>
               </label>
-              <label className="field field--inline">
-                <span>Issue date</span>
-                <input
-                  type="date"
-                  value={edit.issue_date}
-                  onChange={(e) => setField(dt.id, 'issue_date', e.target.value)}
-                />
-              </label>
-              <label className="field field--inline">
-                <span>
-                  Expiry date
-                  {dt.default_validity_days ? ` (${dt.default_validity_days}d default)` : ''}
-                </span>
-                <input
-                  type="date"
-                  value={edit.expiry_date}
-                  onChange={(e) => setField(dt.id, 'expiry_date', e.target.value)}
-                />
-              </label>
+
+              {dt.tracks_dates === false ? (
+                // Date-less identity documents (Aadhaar, PAN): capture a
+                // number instead of meaningless issue/expiry dates.
+                <label className="field field--inline doc-card__number">
+                  <span>Card / document number (optional)</span>
+                  <input
+                    value={edit.document_number}
+                    onChange={(e) => setField(dt.id, 'document_number', e.target.value)}
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                </label>
+              ) : (
+                <>
+                  <label className="field field--inline">
+                    <span>Issue date</span>
+                    <input
+                      type="date"
+                      value={edit.issue_date}
+                      onChange={(e) => setField(dt.id, 'issue_date', e.target.value)}
+                    />
+                  </label>
+                  <label className="field field--inline">
+                    <span>
+                      Expiry date
+                      {dt.default_validity_days ? ` (${dt.default_validity_days}d default)` : ''}
+                    </span>
+                    <input
+                      type="date"
+                      value={edit.expiry_date}
+                      onChange={(e) => setField(dt.id, 'expiry_date', e.target.value)}
+                    />
+                  </label>
+                </>
+              )}
             </div>
 
             <div className="doc-card__actions">

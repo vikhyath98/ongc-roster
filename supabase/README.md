@@ -8,6 +8,7 @@ supabase/
     0001_init.sql          # all tables, indexes, updated_at triggers (SPEC.md §4)
     0002_rls.sql           # RLS policies: any authenticated user = full read/write
     0003_app_users_link.sql# auto-create + backfill app_users from auth.users
+    0004_doc_number_and_dateless.sql # doc number + date-less docs (Aadhaar/PAN)
   seed.sql                 # reference + config data (idempotent; safe to re-run)
 ```
 
@@ -27,7 +28,8 @@ Use one of the two paths below.
 3. New query → paste `seed.sql`, **Run**.
 4. New query → paste `migrations/0002_rls.sql`, **Run** (RLS policies).
 5. New query → paste `migrations/0003_app_users_link.sql`, **Run** (app_users linkage).
-6. Verify under **Table Editor** that 14 tables exist and that
+6. New query → paste `migrations/0004_doc_number_and_dateless.sql`, **Run**.
+7. Verify under **Table Editor** that 14 tables exist and that
    `categories` (4), `installations` (14), `designations` (9),
    `document_types` (13), and `app_config` (5) are populated.
 
