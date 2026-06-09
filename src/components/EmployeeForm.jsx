@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Modal from './Modal'
 import { createEmployee, updateEmployee } from '../lib/employees'
 
@@ -16,11 +16,11 @@ export default function EmployeeForm({ open, employee, designations, onClose, on
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [lastId, setLastId] = useState(null)
 
-  // Reset the form whenever the target employee changes (or add mode opens).
-  if (open && employee?.id !== lastId) {
-    setLastId(employee?.id ?? null)
+  // Reset the form whenever the modal opens or the target employee changes.
+  // (Done in an effect, not during render, to avoid an add-mode render loop.)
+  useEffect(() => {
+    if (!open) return
     setForm(
       employee
         ? {
@@ -34,7 +34,7 @@ export default function EmployeeForm({ open, employee, designations, onClose, on
         : EMPTY
     )
     setError('')
-  }
+  }, [open, employee])
 
   const isEdit = Boolean(employee)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))

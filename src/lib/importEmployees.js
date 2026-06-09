@@ -20,13 +20,20 @@ const HEADER_SYNONYMS = {
 
 const normalize = (s) => String(s ?? '').trim().toLowerCase().replace(/[\s._-]+/g, ' ').trim()
 
+// Pre-normalise the synonyms so matching is case-insensitive, whitespace-
+// trimmed, and separator-agnostic ("emp_id", "Emp ID", "empid" all match).
+// Both the header and the synonym go through normalize(), so they must be
+// compared in the same normalised form.
+const NORMALIZED_SYNONYMS = Object.entries(HEADER_SYNONYMS).reduce((acc, [field, syns]) => {
+  for (const s of syns) acc[normalize(s)] = field
+  return acc
+}, {})
+
 function buildHeaderMap(rawKeys) {
   const map = {}
   for (const key of rawKeys) {
-    const n = normalize(key)
-    for (const [field, syns] of Object.entries(HEADER_SYNONYMS)) {
-      if (syns.includes(n)) map[field] = key
-    }
+    const field = NORMALIZED_SYNONYMS[normalize(key)]
+    if (field && !map[field]) map[field] = key
   }
   return map
 }

@@ -1,8 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 
 // All data access goes through this single Supabase client (SPEC.md §2).
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// Read env defensively: import.meta.env exists under Vite but is undefined in
+// plain Node (e.g. when unit-testing pure helpers that live in this tree).
+const env = import.meta.env ?? {}
+const supabaseUrl = env.VITE_SUPABASE_URL
+const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY
 
 // Fail loudly during development if env vars are missing, rather than
 // producing confusing auth errors later.
