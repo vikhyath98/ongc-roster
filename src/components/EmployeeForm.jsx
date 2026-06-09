@@ -83,7 +83,15 @@ export default function EmployeeForm({ open, employee, designations, onClose, on
       <form id="employee-form" onSubmit={handleSubmit} className="form-grid">
         <label className="field">
           <span>Employee ID *</span>
-          <input value={form.emp_id} onChange={set('emp_id')} autoCapitalize="characters" />
+          <input
+            value={form.emp_id}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, emp_id: e.target.value.toUpperCase() }))
+            }
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+          />
         </label>
 
         <label className="field">

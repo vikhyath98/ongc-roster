@@ -38,7 +38,8 @@ export async function updateEmployee(id, input) {
 
 function toRow(input) {
   return {
-    emp_id: input.emp_id?.trim(),
+    // Store emp_id uppercased so case variants can't create duplicates.
+    emp_id: input.emp_id?.trim().toUpperCase(),
     full_name: input.full_name?.trim(),
     designation_id: input.designation_id || null,
     phone: input.phone?.trim() || null,

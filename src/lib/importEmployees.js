@@ -109,7 +109,7 @@ export async function importValidRows(validated) {
   const payload = validated
     .filter((r) => r.valid)
     .map((r) => ({
-      emp_id: r.data.emp_id,
+      emp_id: r.data.emp_id.toUpperCase(),
       full_name: r.data.full_name,
       designation_id: r.data.designation_id,
       phone: r.data.phone || null,
