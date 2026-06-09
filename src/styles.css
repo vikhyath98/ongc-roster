@@ -1,0 +1,262 @@
+:root {
+  --navy: #0b3d5c;
+  --navy-dark: #082d44;
+  --teal: #5ec5e8;
+  --amber: #f4b740;
+  --red: #e2574c;
+  --green: #2fa56a;
+  --bg: #f4f6f8;
+  --card: #ffffff;
+  --text: #1b2733;
+  --muted: #6b7c8c;
+  --border: #e2e8ee;
+  --radius: 14px;
+  --nav-h: 64px;
+  --header-h: 56px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+code {
+  background: rgba(11, 61, 92, 0.08);
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 0.85em;
+}
+
+/* ---------- App shell ---------- */
+.app-shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: var(--header-h);
+  padding: 0 16px;
+  padding-top: env(safe-area-inset-top);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--navy);
+  color: #fff;
+}
+
+.app-header__titles {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.app-header__brand {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+
+.app-header__page {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.app-header__signout {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.app-main {
+  flex: 1;
+  padding: 16px;
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ---------- Bottom nav ---------- */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bottom-nav__item {
+  flex: 1 0 auto;
+  min-width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 4px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.bottom-nav__item--active {
+  color: var(--navy);
+  font-weight: 600;
+}
+
+.bottom-nav__icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+/* ---------- Cards / placeholders ---------- */
+.placeholder {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.placeholder__title {
+  font-size: 1.25rem;
+  margin-bottom: 4px;
+}
+
+.placeholder__spec {
+  font-size: 0.75rem;
+  color: var(--teal);
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+/* ---------- Auth / centered screens ---------- */
+.centered-screen {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-card__brand {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.login-card__brand h1 {
+  font-size: 1.2rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.field input,
+.field select {
+  font-size: 1rem;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.field input:focus,
+.field select:focus {
+  outline: 2px solid var(--teal);
+  border-color: var(--teal);
+}
+
+.btn {
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 13px 16px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.btn--primary {
+  background: var(--navy);
+  color: #fff;
+}
+
+.btn--primary:disabled {
+  opacity: 0.6;
+}
+
+.banner {
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: 0;
+}
+
+.banner--warn {
+  background: rgba(244, 183, 64, 0.15);
+  color: #8a6300;
+}
+
+.banner--error {
+  background: rgba(226, 87, 76, 0.12);
+  color: #a4231a;
+}

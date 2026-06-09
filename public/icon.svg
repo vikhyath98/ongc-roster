@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#0b3d5c"/>
+  <!-- stylised offshore platform + rotation arrows -->
+  <g fill="none" stroke="#5ec5e8" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M176 360 V210 L256 150 L336 210 V360"/>
+    <path d="M150 360 H362"/>
+    <path d="M256 150 V96"/>
+  </g>
+  <g fill="none" stroke="#f4b740" stroke-width="20" stroke-linecap="round">
+    <path d="M120 256 a136 136 0 0 1 232 -96"/>
+    <path d="M392 256 a136 136 0 0 1 -232 96"/>
+  </g>
+  <polygon points="352,150 360,184 326,178" fill="#f4b740"/>
+  <polygon points="160,362 152,328 186,334" fill="#f4b740"/>
+</svg>
