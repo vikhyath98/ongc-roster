@@ -36,6 +36,30 @@ export async function updateEmployee(id, input) {
   return { data, error: friendlyError(error) }
 }
 
+// Onboard an employee: open a rotation_log stint and mirror the location onto
+// the employee row (SPEC.md §5.4, §6.1). Used both when entering an
+// already-offshore employee and (later) by the Boarding flow.
+export async function onboardEmployee(
+  employeeId,
+  { installationId, signOnDate, expectedRotationDate },
+  userId
+) {
+  const { error: logErr } = await supabase.from('rotation_log').insert({
+    employee_id: employeeId,
+    installation_id: installationId,
+    sign_on_date: signOnDate,
+    expected_rotation_date: expectedRotationDate || null,
+    onboarded_by: userId ?? null,
+  })
+  if (logErr) return { error: logErr }
+
+  const { error: mirrorErr } = await supabase
+    .from('employees')
+    .update({ current_installation_id: installationId })
+    .eq('id', employeeId)
+  return { error: mirrorErr }
+}
+
 function toRow(input) {
   return {
     // Store emp_id uppercased so case variants can't create duplicates.

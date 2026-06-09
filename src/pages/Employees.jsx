@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listEmployees } from '../lib/employees'
-import { listDesignations } from '../lib/reference'
+import { listDesignations, listInstallations } from '../lib/reference'
 import { listDocumentTypes, listAllEmployeeDocuments, computeCertStatus } from '../lib/documents'
+import { getAppConfig, configInt } from '../lib/config'
 import EmployeeForm from '../components/EmployeeForm'
 import EmployeeDetail from '../components/EmployeeDetail'
 import EmployeeImport from '../components/EmployeeImport'
@@ -9,6 +10,8 @@ import EmployeeImport from '../components/EmployeeImport'
 export default function Employees() {
   const [employees, setEmployees] = useState([])
   const [designations, setDesignations] = useState([])
+  const [installations, setInstallations] = useState([])
+  const [maxServiceDays, setMaxServiceDays] = useState(70)
   const [docTypes, setDocTypes] = useState([])
   const [allDocs, setAllDocs] = useState([])
   const [query, setQuery] = useState('')
@@ -21,17 +24,21 @@ export default function Employees() {
 
   async function load() {
     setLoading(true)
-    const [emp, des, dts, eds] = await Promise.all([
+    const [emp, des, inst, dts, eds, cfg] = await Promise.all([
       listEmployees(),
       listDesignations(),
+      listInstallations({ activeOnly: true }),
       listDocumentTypes(),
       listAllEmployeeDocuments(),
+      getAppConfig(),
     ])
     if (emp.error) setError(emp.error.message)
     else setEmployees(emp.data ?? [])
     if (!des.error) setDesignations(des.data ?? [])
+    if (!inst.error) setInstallations(inst.data ?? [])
     if (!dts.error) setDocTypes(dts.data ?? [])
     if (!eds.error) setAllDocs(eds.data ?? [])
+    if (!cfg.error) setMaxServiceDays(configInt(cfg.config, 'max_service_days', 70))
     setLoading(false)
   }
 
@@ -169,6 +176,8 @@ export default function Employees() {
         open={formOpen}
         employee={editing}
         designations={designations}
+        installations={installations}
+        maxServiceDays={maxServiceDays}
         onClose={() => setFormOpen(false)}
         onSaved={handleSaved}
       />

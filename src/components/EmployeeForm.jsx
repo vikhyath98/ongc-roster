@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
-import { createEmployee, updateEmployee } from '../lib/employees'
+import { createEmployee, updateEmployee, onboardEmployee } from '../lib/employees'
+import { useAuth } from '../context/AuthContext'
+import { todayISO, addDays } from '../lib/dates'
 
 const EMPTY = {
   emp_id: '',
@@ -9,10 +11,24 @@ const EMPTY = {
   phone: '',
   employment_status: 'active',
   notes: '',
+  location_id: '', // '' = on base
+  sign_on_date: '',
 }
 
 // Add/edit an employee. `employee` null => add mode.
-export default function EmployeeForm({ open, employee, designations, onClose, onSaved }) {
+// Location can be set on entry for staff already offshore: choosing an
+// installation also captures a sign-on date and opens a rotation stint, so
+// day-counting and penalties are correct (SPEC.md §5.4, §6.1).
+export default function EmployeeForm({
+  open,
+  employee,
+  designations,
+  installations = [],
+  maxServiceDays = 70,
+  onClose,
+  onSaved,
+}) {
+  const { user } = useAuth()
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -30,14 +46,21 @@ export default function EmployeeForm({ open, employee, designations, onClose, on
             phone: employee.phone ?? '',
             employment_status: employee.employment_status ?? 'active',
             notes: employee.notes ?? '',
+            location_id: employee.current_installation_id ?? '',
+            sign_on_date: todayISO(),
           }
-        : EMPTY
+        : { ...EMPTY, sign_on_date: todayISO() }
     )
     setError('')
   }, [open, employee])
 
   const isEdit = Boolean(employee)
+  // Already offshore => location is managed via the Boarding flow, not here.
+  const isOffshore = isEdit && Boolean(employee?.current_installation_id)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const expectedRotation = form.sign_on_date
+    ? addDays(form.sign_on_date, maxServiceDays)
+    : ''
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -46,15 +69,41 @@ export default function EmployeeForm({ open, employee, designations, onClose, on
       setError('Employee ID, name and designation are required.')
       return
     }
+    const willOnboard = !isOffshore && Boolean(form.location_id)
+    if (willOnboard && !form.sign_on_date) {
+      setError('Enter the sign-on date for the chosen location.')
+      return
+    }
+
     setBusy(true)
     const { data, error: saveErr } = isEdit
       ? await updateEmployee(employee.id, form)
       : await createEmployee(form)
-    setBusy(false)
     if (saveErr) {
+      setBusy(false)
       setError(saveErr.message)
       return
     }
+
+    if (willOnboard) {
+      const { error: onboardErr } = await onboardEmployee(
+        data.id,
+        {
+          installationId: form.location_id,
+          signOnDate: form.sign_on_date,
+          expectedRotationDate: expectedRotation,
+        },
+        user?.id
+      )
+      if (onboardErr) {
+        setBusy(false)
+        setError(`Employee saved, but onboarding failed: ${onboardErr.message}`)
+        onSaved?.(data)
+        return
+      }
+    }
+
+    setBusy(false)
     onSaved?.(data)
     onClose?.()
   }
@@ -69,12 +118,7 @@ export default function EmployeeForm({ open, employee, designations, onClose, on
           <button type="button" className="btn btn--ghost" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            form="employee-form"
-            className="btn btn--primary"
-            disabled={busy}
-          >
+          <button type="submit" form="employee-form" className="btn btn--primary" disabled={busy}>
             {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Add employee'}
           </button>
         </>
@@ -85,9 +129,7 @@ export default function EmployeeForm({ open, employee, designations, onClose, on
           <span>Employee ID *</span>
           <input
             value={form.emp_id}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, emp_id: e.target.value.toUpperCase() }))
-            }
+            onChange={(e) => setForm((f) => ({ ...f, emp_id: e.target.value.toUpperCase() }))}
             autoCapitalize="characters"
             autoCorrect="off"
             spellCheck={false}
@@ -116,6 +158,43 @@ export default function EmployeeForm({ open, employee, designations, onClose, on
           <span>Phone</span>
           <input value={form.phone} onChange={set('phone')} inputMode="tel" />
         </label>
+
+        {/* Location */}
+        {isOffshore ? (
+          <div className="field">
+            <span>Current location</span>
+            <p className="field-readonly">
+              📍 {employee.installation?.name ?? 'Offshore'} — manage moves in the Boarding screen.
+            </p>
+          </div>
+        ) : (
+          <>
+            <label className="field">
+              <span>Current location</span>
+              <select value={form.location_id} onChange={set('location_id')}>
+                <option value="">On base</option>
+                {installations.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name} ({i.type})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {form.location_id && (
+              <>
+                <label className="field">
+                  <span>Sign-on date * (when they boarded)</span>
+                  <input type="date" value={form.sign_on_date} onChange={set('sign_on_date')} />
+                </label>
+                <p className="field-hint muted">
+                  Opens a rotation record. Expected rotation:{' '}
+                  <strong>{expectedRotation || '—'}</strong> (sign-on + {maxServiceDays} days).
+                </p>
+              </>
+            )}
+          </>
+        )}
 
         <label className="field">
           <span>Employment status</span>

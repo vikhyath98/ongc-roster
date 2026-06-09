@@ -492,6 +492,20 @@ code {
   border-color: var(--teal);
 }
 
+.field-readonly {
+  margin: 0;
+  padding: 11px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: rgba(11, 61, 92, 0.04);
+  font-size: 0.9rem;
+}
+
+.field-hint {
+  margin: -4px 2px 0;
+  font-size: 0.78rem;
+}
+
 .field--inline {
   font-size: 0.78rem;
   font-weight: 500;
