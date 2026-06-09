@@ -22,7 +22,7 @@ Use one of the two paths below.
 2. Paste the entire contents of `migrations/0001_init.sql`, **Run**.
 3. New query → paste `seed.sql`, **Run**.
 4. Verify under **Table Editor** that 14 tables exist and that
-   `categories` (4), `installations` (14), `designations` (6),
+   `categories` (4), `installations` (14), `designations` (9),
    `document_types` (13), and `app_config` (5) are populated.
 
 ### Option B — Supabase CLI (repeatable)
@@ -41,7 +41,7 @@ psql "$DATABASE_URL" -f supabase/seed.sql   # or paste seed.sql in SQL Editor
 
 ```sql
 select count(*) from installations;   -- expect 14
-select count(*) from designations;    -- expect 6 (plus any you added)
+select count(*) from designations;    -- expect 9 (plus any you add later)
 select count(*) from document_types;  -- expect 13
 select key, value from app_config order by key;  -- 5 rows
 -- ITI Certificate must map to BOTH Electrician and Plumber:

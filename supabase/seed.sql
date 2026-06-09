@@ -15,37 +15,25 @@ insert into categories (name) values
 on conflict (name) do nothing;
 
 -- ---------------------------------------------------------------------
--- Designations
--- The six below are required so the document mapping can attach (SPEC.md §4).
--- NOTE: the category assignment for each is a sensible default and is fully
--- editable in Configuration — adjust if your real grading differs.
+-- Designations (real grading provided by the operator).
+-- Replacement matching is by designation; category is the broad bucket (§3.7).
+-- More designations can be added later from the Configuration screen.
 -- ---------------------------------------------------------------------
 insert into designations (name, category_id)
 select d.name, c.id
 from (values
   ('Catering Manager', 'Skilled'),
   ('Cook',             'Semi-skilled'),
-  ('Asst Cook',        'Semi-skilled'),
-  ('Electrician',      'Skilled'),
-  ('Plumber',          'Skilled'),
-  ('Housekeeper',      'Unskilled')
+  ('Electrician',      'Semi-skilled'),
+  ('Plumber',          'Semi-skilled'),
+  ('Assistant Cook',   'Unskilled'),
+  ('Housekeeper',      'Unskilled'),
+  ('Laundry',          'Unskilled'),
+  ('Room Boy',         'Unskilled'),
+  ('Pest Controller',  'Outsourced')
 ) as d(name, category)
 join categories c on c.name = d.category
 on conflict (name, category_id) do nothing;
-
--- >>> PLACEHOLDER: add your remaining real designations here. <<<
--- Uncomment and fill in. Use one of: Unskilled, Semi-skilled, Skilled, Outsourced.
--- (You can also add these from the Configuration screen once the app is running.)
---
--- insert into designations (name, category_id)
--- select d.name, c.id
--- from (values
---   ('Steward',         'Unskilled'),
---   ('Pest Controller', 'Outsourced'),
---   ('__YOUR_DESIGNATION__', '__CATEGORY__')
--- ) as d(name, category)
--- join categories c on c.name = d.category
--- on conflict (name, category_id) do nothing;
 
 -- ---------------------------------------------------------------------
 -- Installations — 8 platforms + 6 rigs (real names, all active for now).
@@ -101,7 +89,7 @@ from (values
   ('HACCP',                                                           'Catering Manager'),
   ('Hotel Management (2 yrs exp) OR 5-yr Offshore Experience Letter', 'Catering Manager'),
   ('Hotel Management (2 yrs exp) OR 5-yr Offshore Experience Letter', 'Cook'),
-  ('Cookery Certificate',                                             'Asst Cook'),
+  ('Cookery Certificate',                                             'Assistant Cook'),
   ('PWD Licence',                                                     'Electrician'),
   ('ITI Certificate',                                                 'Electrician'),
   ('ITI Certificate',                                                 'Plumber'),
