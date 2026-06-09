@@ -4,6 +4,7 @@ import { listDesignations } from '../lib/reference'
 import { listDocumentTypes, listAllEmployeeDocuments, computeCertStatus } from '../lib/documents'
 import EmployeeForm from '../components/EmployeeForm'
 import EmployeeDetail from '../components/EmployeeDetail'
+import EmployeeImport from '../components/EmployeeImport'
 
 export default function Employees() {
   const [employees, setEmployees] = useState([])
@@ -16,6 +17,7 @@ export default function Employees() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [detail, setDetail] = useState(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -91,6 +93,13 @@ export default function Employees() {
         <button type="button" className="btn btn--primary btn--sm" onClick={openAdd}>
           ＋ Add
         </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() => setImportOpen(true)}
+        >
+          ⬆ Import
+        </button>
       </div>
 
       {loading && <p className="muted">Loading employees…</p>}
@@ -162,6 +171,14 @@ export default function Employees() {
         designations={designations}
         onClose={() => setFormOpen(false)}
         onSaved={handleSaved}
+      />
+
+      <EmployeeImport
+        open={importOpen}
+        designations={designations}
+        existingEmpIds={employees.map((e) => e.emp_id)}
+        onClose={() => setImportOpen(false)}
+        onImported={load}
       />
     </section>
   )
