@@ -40,7 +40,7 @@ npm run preview
 ## Build progress (per SPEC.md §7)
 
 - [x] **1. Scaffold** — Vite + React PWA, Supabase client, auth shell, bottom nav (8 modules)
-- [ ] 2. Supabase migration + seed
+- [x] **2. Supabase migration + seed** — `supabase/migrations/0001_init.sql` + `supabase/seed.sql` (see `supabase/README.md` to apply)
 - [ ] 3. Email auth + `app_users` linkage
 - [ ] 4. Employee management (+ `.xlsx` bulk import)
 - [ ] 5. Boarding flow (batch onboard/offboard)
