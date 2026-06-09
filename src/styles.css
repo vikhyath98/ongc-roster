@@ -491,3 +491,125 @@ code {
   outline: 2px solid var(--teal);
   border-color: var(--teal);
 }
+
+.field--inline {
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.field--inline input,
+.field--inline select {
+  font-size: 0.95rem;
+  padding: 9px 10px;
+}
+
+/* ---------- Employee detail ---------- */
+.detail-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.detail-meta__label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.detail-meta__value {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.detail-notes {
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.cert-summary {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+.cert-summary--ok {
+  background: rgba(47, 165, 106, 0.14);
+  color: #1c6e45;
+}
+
+.cert-summary--bad {
+  background: rgba(226, 87, 76, 0.12);
+  color: #a4231a;
+}
+
+.cert-problems {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.cert-problems li {
+  margin-bottom: 2px;
+}
+
+.section-heading {
+  font-size: 0.95rem;
+  margin: 18px 0 8px;
+}
+
+/* ---------- Document checklist ---------- */
+.doc-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.doc-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.doc-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.doc-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.doc-card__fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.doc-card__fields .field--inline:first-child {
+  grid-column: 1 / -1;
+}
+
+.doc-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
