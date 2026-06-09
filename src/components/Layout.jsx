@@ -3,8 +3,9 @@ import { useAuth } from '../context/AuthContext'
 import BottomNav, { NAV_ITEMS } from './BottomNav'
 
 export default function Layout() {
-  const { user, signOut } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const location = useLocation()
+  const who = profile?.full_name || user?.email || 'Signed in'
 
   const current =
     NAV_ITEMS.find((i) =>
@@ -22,7 +23,7 @@ export default function Layout() {
           type="button"
           className="app-header__signout"
           onClick={() => signOut()}
-          title={user?.email ?? 'Sign out'}
+          title={`${who} — tap to sign out`}
         >
           Sign out
         </button>

@@ -41,7 +41,7 @@ npm run preview
 
 - [x] **1. Scaffold** — Vite + React PWA, Supabase client, auth shell, bottom nav (8 modules)
 - [x] **2. Supabase migration + seed** — `supabase/migrations/0001_init.sql` + `supabase/seed.sql` (see `supabase/README.md` to apply)
-- [ ] 3. Email auth + `app_users` linkage
+- [x] **3. Email auth + `app_users` linkage** — login wired (step 1), `app_users` auto-created via DB trigger + client upsert; RLS = authenticated full access
 - [ ] 4. Employee management (+ `.xlsx` bulk import)
 - [ ] 5. Boarding flow (batch onboard/offboard)
 - [ ] 6. Active roster + colour states
