@@ -687,6 +687,96 @@ code {
   color: #a4231a;
 }
 
+/* ---------- Replacement finder ---------- */
+.target-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin: 10px 0;
+}
+
+.target-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.target-card__top .emp-card__name,
+.target-card__top .emp-card__meta {
+  display: block;
+}
+
+.target-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 10px;
+  font-size: 0.85rem;
+}
+
+.cand-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.cand-card--dim {
+  opacity: 0.6;
+}
+
+.cand-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cand-confirmed {
+  margin-left: 8px;
+}
+
+.cand-card__calls {
+  font-size: 0.76rem;
+  margin: 8px 0;
+}
+
+.cand-card__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cand-card__actions .btn {
+  flex: 1;
+}
+
+.outcome-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.outcome-btn {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.outcome-btn--on {
+  border-color: var(--teal);
+  background: rgba(94, 197, 232, 0.12);
+  color: var(--navy);
+  font-weight: 600;
+}
+
 /* ---------- Segmented tabs ---------- */
 .seg {
   display: flex;

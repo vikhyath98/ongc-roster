@@ -45,7 +45,7 @@ npm run preview
 - [x] **4. Employee management** — searchable list, add/edit, document checklist + cert-current (§6.4), `.xlsx` bulk import with validated preview
 - [x] **5. Boarding flow** — batch onboard/offboard on a shared transport date (§5.4, §6.1)
 - [x] **6. Active roster** — grouped by installation, days served + colour states (§6.2), filter by installation & designation
-- [ ] 7. Replacement finder + reserve pool
+- [x] **7. Replacement finder + reserve pool** — strict reserve pool (§3.4); ranked same-designation candidates with call/confirm lifecycle (§6.5/§6.6)
 - [ ] 8. Penalty tracker
 - [ ] 9. Configuration
 - [ ] 10. Dashboard

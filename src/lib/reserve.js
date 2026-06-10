@@ -69,6 +69,11 @@ export async function loadCandidates() {
   return {
     candidates,
     confirmationValidityDays: configInt(config, 'confirmation_validity_days', 14),
+    thresholds: {
+      min: configInt(config, 'min_service_days', 56),
+      warning: configInt(config, 'warning_day', 65),
+      max: configInt(config, 'max_service_days', 70),
+    },
     error: null,
   }
 }
