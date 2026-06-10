@@ -1,10 +1,32 @@
-import ModulePlaceholder from '../components/ModulePlaceholder'
+import { useState } from 'react'
+import ThresholdsConfig from '../components/config/ThresholdsConfig'
+
+// Configuration (SPEC.md §5.8). A section picker keeps each editor focused on
+// a phone. More sections are added in subsequent build steps.
+const SECTIONS = [
+  { key: 'thresholds', label: 'Thresholds & rates', Component: ThresholdsConfig },
+]
 
 export default function Configuration() {
+  const [section, setSection] = useState(SECTIONS[0].key)
+  const Active = SECTIONS.find((s) => s.key === section)?.Component ?? (() => null)
+
   return (
-    <ModulePlaceholder title="Configuration" spec="§5.8, §4">
-      Edit thresholds/rates, installations (incl. active toggle), designations,
-      document types (universal or designation-specific), and requirements.
-    </ModulePlaceholder>
+    <section>
+      <label className="field">
+        <span>Section</span>
+        <select value={section} onChange={(e) => setSection(e.target.value)}>
+          {SECTIONS.map((s) => (
+            <option key={s.key} value={s.key}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="config-section">
+        <Active />
+      </div>
+    </section>
   )
 }

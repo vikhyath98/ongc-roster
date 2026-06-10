@@ -700,6 +700,113 @@ code {
   color: #a4231a;
 }
 
+/* ---------- Configuration ---------- */
+.config-section {
+  margin-top: 14px;
+}
+
+.config-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.config-row__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.config-row__title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.config-row__sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.config-row__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Simple toggle switch */
+.switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.switch__track {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 999px;
+  transition: background 0.15s;
+}
+.switch__track::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.15s;
+}
+.switch input:checked + .switch__track {
+  background: var(--green);
+}
+.switch input:checked + .switch__track::before {
+  transform: translateX(18px);
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chip {
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.chip--on {
+  border-color: var(--teal);
+  background: rgba(94, 197, 232, 0.12);
+  color: var(--navy);
+  font-weight: 600;
+}
+
 /* ---------- Rotation history ---------- */
 .rot-history {
   list-style: none;
