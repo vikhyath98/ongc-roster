@@ -785,6 +785,20 @@ code {
   transform: translateX(18px);
 }
 
+.checkrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+.checkrow input {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
 .chip-group {
   display: flex;
   flex-wrap: wrap;

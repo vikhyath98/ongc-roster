@@ -2,6 +2,7 @@ import { useState } from 'react'
 import ThresholdsConfig from '../components/config/ThresholdsConfig'
 import InstallationsConfig from '../components/config/InstallationsConfig'
 import DesignationsConfig from '../components/config/DesignationsConfig'
+import DocumentTypesConfig from '../components/config/DocumentTypesConfig'
 
 // Configuration (SPEC.md §5.8). A section picker keeps each editor focused on
 // a phone. More sections are added in subsequent build steps.
@@ -9,6 +10,7 @@ const SECTIONS = [
   { key: 'thresholds', label: 'Thresholds & rates', Component: ThresholdsConfig },
   { key: 'installations', label: 'Installations', Component: InstallationsConfig },
   { key: 'designations', label: 'Designations', Component: DesignationsConfig },
+  { key: 'documents', label: 'Document types', Component: DocumentTypesConfig },
 ]
 
 export default function Configuration() {
