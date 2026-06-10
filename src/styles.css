@@ -583,6 +583,14 @@ code {
 }
 
 /* ---------- Roster ---------- */
+.roster-filters {
+  margin-bottom: 10px;
+}
+
+.roster-clear {
+  margin-left: 8px;
+}
+
 .roster-group {
   margin-bottom: 18px;
 }

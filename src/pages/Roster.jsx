@@ -9,6 +9,8 @@ export default function Roster() {
   const [thresholds, setThresholds] = useState({ min: 56, warning: 65, max: 70 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [fInstall, setFInstall] = useState('')
+  const [fDesig, setFDesig] = useState('')
 
   useEffect(() => {
     ;(async () => {
@@ -27,12 +29,28 @@ export default function Roster() {
     })()
   }, [])
 
-  // Decorate each stint with days served + colour state, then group by site.
+  // Distinct installations + designations present offshore, for the filters.
+  const installOptions = useMemo(() => {
+    const m = new Map()
+    for (const s of stints) if (s.installation) m.set(s.installation.id, s.installation)
+    return [...m.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [stints])
+
+  const desigOptions = useMemo(() => {
+    const m = new Map()
+    for (const s of stints) if (s.employee?.designation) m.set(s.employee.designation.id, s.employee.designation)
+    return [...m.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [stints])
+
+  // Decorate each stint with days served + colour state, apply filters, group.
   const groups = useMemo(() => {
-    const decorated = stints.map((s) => {
-      const days = daysInclusive(s.sign_on_date)
-      return { ...s, days, state: rotationState(days, thresholds) }
-    })
+    const decorated = stints
+      .filter((s) => !fInstall || s.installation_id === fInstall)
+      .filter((s) => !fDesig || s.employee?.designation?.id === fDesig)
+      .map((s) => {
+        const days = daysInclusive(s.sign_on_date)
+        return { ...s, days, state: rotationState(days, thresholds) }
+      })
     const byInstall = new Map()
     for (const s of decorated) {
       const key = s.installation?.id ?? 'unknown'
@@ -46,9 +64,11 @@ export default function Roster() {
     list.sort((a, b) => (a.installation?.name ?? '').localeCompare(b.installation?.name ?? ''))
     for (const g of list) g.people.sort((a, b) => b.days - a.days)
     return list
-  }, [stints, thresholds])
+  }, [stints, thresholds, fInstall, fDesig])
 
   const total = stints.length
+  const shown = groups.reduce((n, g) => n + g.people.length, 0)
+  const filtered = Boolean(fInstall || fDesig)
 
   return (
     <section>
@@ -57,12 +77,54 @@ export default function Roster() {
 
       {!loading && !error && (
         <>
+          {total > 0 && (
+            <div className="board-controls roster-filters">
+              <label className="field">
+                <span>Installation</span>
+                <select value={fInstall} onChange={(e) => setFInstall(e.target.value)}>
+                  <option value="">All installations</option>
+                  {installOptions.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name} ({i.type})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Designation</span>
+                <select value={fDesig} onChange={(e) => setFDesig(e.target.value)}>
+                  <option value="">All designations</option>
+                  {desigOptions.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
           <p className="list-count muted">
-            {total} offshore across {groups.length} installation{groups.length === 1 ? '' : 's'}
+            {filtered ? `${shown} of ${total} offshore` : `${total} offshore`} across{' '}
+            {groups.length} installation{groups.length === 1 ? '' : 's'}
+            {filtered && (
+              <button
+                type="button"
+                className="linkish roster-clear"
+                onClick={() => {
+                  setFInstall('')
+                  setFDesig('')
+                }}
+              >
+                Clear filters
+              </button>
+            )}
           </p>
 
           {total === 0 ? (
             <p className="muted empty-state">Nobody is offshore right now.</p>
+          ) : shown === 0 ? (
+            <p className="muted empty-state">No offshore staff match these filters.</p>
           ) : (
             groups.map((g) => {
               const over = g.people.filter((p) => p.state.key === 'over').length
