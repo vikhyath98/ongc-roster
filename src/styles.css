@@ -582,6 +582,129 @@ code {
   margin: 18px 0 8px;
 }
 
+/* ---------- Segmented tabs ---------- */
+.seg {
+  display: flex;
+  background: rgba(11, 61, 92, 0.06);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 14px;
+}
+
+.seg__btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 10px;
+  border-radius: 9px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.seg__btn--on {
+  background: var(--card);
+  color: var(--navy);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ---------- Boarding ---------- */
+.board-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.board-tab {
+  padding-bottom: 64px; /* room for the sticky action bar */
+}
+
+.select-list__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 2px;
+  font-size: 0.78rem;
+}
+
+.select-list__bar-actions {
+  display: flex;
+  gap: 14px;
+}
+
+.linkish {
+  border: none;
+  background: transparent;
+  color: var(--navy);
+  font-weight: 600;
+  font-size: 0.78rem;
+  padding: 0;
+}
+
+.linkish:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.pick-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.pick-card--on {
+  border-color: var(--teal);
+  background: rgba(94, 197, 232, 0.08);
+}
+
+.pick-card__check {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.8rem;
+}
+
+.pick-card__check--on {
+  background: var(--teal);
+  border-color: var(--teal);
+}
+
+.pick-card__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.board-actionbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding: 10px 16px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  z-index: 15;
+}
+
+.board-actionbar .btn {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  display: block;
+}
+
 /* ---------- Manage (deactivate / delete) ---------- */
 .manage-box {
   background: var(--card);
