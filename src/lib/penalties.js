@@ -31,6 +31,18 @@ export async function reconcilePenalty(exposureRow, remark, userId) {
   const r = remark?.trim()
   if (!r) return { error: { message: 'A reconciliation remark is required.' } }
 
+  // Backend guard (don't trust the client): a stint can only be reconciled
+  // once it has signed off. An open stint is still accruing.
+  const { data: stint, error: stintErr } = await supabase
+    .from('rotation_log')
+    .select('sign_off_date')
+    .eq('id', exposureRow.rotation_log_id)
+    .maybeSingle()
+  if (stintErr) return { error: stintErr }
+  if (!stint || stint.sign_off_date == null) {
+    return { error: { message: 'Still offshore — offboard first.' } }
+  }
+
   const { data, error } = await supabase
     .from('penalty_log')
     .insert({

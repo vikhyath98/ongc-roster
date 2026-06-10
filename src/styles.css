@@ -751,6 +751,13 @@ code {
   margin-top: 4px;
 }
 
+.penalty-blocked {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: right;
+  max-width: 96px;
+}
+
 /* ---------- Bulk verify documents ---------- */
 .bulk-types {
   list-style: none;

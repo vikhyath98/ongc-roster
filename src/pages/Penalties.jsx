@@ -122,13 +122,17 @@ export default function Penalties() {
                     </div>
                     <div className="penalty-card__side">
                       <span className="penalty-amount">{money(p.total_penalty)}</span>
-                      <button
-                        type="button"
-                        className="btn btn--ghost btn--sm"
-                        onClick={() => openReconcile(p)}
-                      >
-                        Reconcile
-                      </button>
+                      {p.finalised ? (
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          onClick={() => openReconcile(p)}
+                        >
+                          Reconcile
+                        </button>
+                      ) : (
+                        <span className="penalty-blocked">Still offshore — offboard first</span>
+                      )}
                     </div>
                   </div>
                 </li>
