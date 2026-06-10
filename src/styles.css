@@ -582,6 +582,43 @@ code {
   margin: 18px 0 8px;
 }
 
+/* ---------- Manage (deactivate / delete) ---------- */
+.manage-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.manage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.manage-hint {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+}
+
+.manage-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+.manage-confirm p {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+}
+
+.manage-confirm__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 /* ---------- Document checklist ---------- */
 .doc-checklist {
   display: flex;

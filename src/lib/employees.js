@@ -60,6 +60,47 @@ export async function onboardEmployee(
   return { error: mirrorErr }
 }
 
+// Soft delete / reactivate: the standard way to retire someone while keeping
+// all history. Inactive staff are filtered out of operational lists.
+export async function setEmploymentStatus(id, status) {
+  const { data, error } = await supabase
+    .from('employees')
+    .update({ employment_status: status })
+    .eq('id', id)
+    .select(SELECT)
+    .single()
+  return { data, error }
+}
+
+// How many rotation stints an employee has (ever). Used to decide whether a
+// hard delete is allowed.
+export async function employeeRotationCount(employeeId) {
+  const { count, error } = await supabase
+    .from('rotation_log')
+    .select('id', { count: 'exact', head: true })
+    .eq('employee_id', employeeId)
+  return { count: count ?? 0, error }
+}
+
+// Hard delete — ONLY permitted for employees with NO rotation history
+// (data-entry mistakes / test rows). Employees with history must be
+// deactivated instead; this function refuses them as a safety net even if the
+// UI hides the button. Documents/availability/call_log cascade away.
+export async function deleteEmployee(employeeId) {
+  const { count, error: countErr } = await employeeRotationCount(employeeId)
+  if (countErr) return { error: countErr }
+  if (count > 0) {
+    return {
+      error: {
+        message:
+          'This employee has rotation history and cannot be deleted. Set them Inactive instead.',
+      },
+    }
+  }
+  const { error } = await supabase.from('employees').delete().eq('id', employeeId)
+  return { error }
+}
+
 function toRow(input) {
   return {
     // Store emp_id uppercased so case variants can't create duplicates.

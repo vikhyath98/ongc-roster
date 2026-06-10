@@ -169,6 +169,7 @@ export default function Employees() {
         employeeDocs={detailEmployee ? docsByEmployee.get(detailEmployee.id) ?? [] : []}
         onEdit={editFromDetail}
         onClose={() => setDetail(null)}
+        onChanged={load}
         onDocsChanged={load}
       />
 
