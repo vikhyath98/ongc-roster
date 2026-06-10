@@ -43,7 +43,7 @@ npm run preview
 - [x] **2. Supabase migration + seed** — `supabase/migrations/0001_init.sql` + `supabase/seed.sql` (see `supabase/README.md` to apply)
 - [x] **3. Email auth + `app_users` linkage** — login wired (step 1), `app_users` auto-created via DB trigger + client upsert; RLS = authenticated full access
 - [x] **4. Employee management** — searchable list, add/edit, document checklist + cert-current (§6.4), `.xlsx` bulk import with validated preview
-- [ ] 5. Boarding flow (batch onboard/offboard)
+- [x] **5. Boarding flow** — batch onboard/offboard on a shared transport date (§5.4, §6.1)
 - [ ] 6. Active roster + colour states
 - [ ] 7. Replacement finder + reserve pool
 - [ ] 8. Penalty tracker

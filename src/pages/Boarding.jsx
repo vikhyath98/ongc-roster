@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
-import { listBaseEmployees, batchOnboard } from '../lib/boarding'
+import { useEffect, useMemo, useState } from 'react'
+import { listBaseEmployees, listOffshoreStints, batchOnboard, batchOffboard } from '../lib/boarding'
 import { listInstallations } from '../lib/reference'
 import { getAppConfig, configInt } from '../lib/config'
 import { useAuth } from '../context/AuthContext'
-import { todayISO, addDays } from '../lib/dates'
+import { todayISO, addDays, daysInclusive } from '../lib/dates'
 import SelectableEmployeeList from '../components/SelectableEmployeeList'
 
 export default function Boarding() {
@@ -29,11 +29,7 @@ export default function Boarding() {
         </button>
       </div>
 
-      {tab === 'onboard' ? (
-        <OnboardTab userId={user?.id} />
-      ) : (
-        <p className="muted empty-state">Offboard is coming in the next step.</p>
-      )}
+      {tab === 'onboard' ? <OnboardTab userId={user?.id} /> : <OffboardTab userId={user?.id} />}
     </section>
   )
 }
@@ -148,6 +144,122 @@ function OnboardTab({ userId }) {
           {busy
             ? 'Onboarding…'
             : `Onboard ${selected.size || ''}${installation ? ` → ${installation.name}` : ''}`.trim()}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function OffboardTab({ userId }) {
+  const [stints, setStints] = useState([])
+  const [filterInstallation, setFilterInstallation] = useState('')
+  const [signOffDate, setSignOffDate] = useState(todayISO())
+  const [selected, setSelected] = useState(new Set())
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState('')
+
+  async function load() {
+    setLoading(true)
+    const { data, error: err } = await listOffshoreStints()
+    if (err) setError(err.message)
+    else setStints(data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  // Installations present offshore, for the filter dropdown.
+  const sites = useMemo(() => {
+    const m = new Map()
+    for (const s of stints) if (s.installation) m.set(s.installation.id, s.installation)
+    return [...m.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [stints])
+
+  const visible = useMemo(
+    () => (filterInstallation ? stints.filter((s) => s.installation_id === filterInstallation) : stints),
+    [stints, filterInstallation]
+  )
+
+  function toggle(id) {
+    setSelected((s) => {
+      const next = new Set(s)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+    setDone('')
+  }
+  const selectAll = (ids) => setSelected(new Set(ids))
+  const clear = () => setSelected(new Set())
+
+  const canSubmit = signOffDate && selected.size > 0 && !busy
+
+  async function submit() {
+    setBusy(true)
+    setError('')
+    setDone('')
+    const chosen = stints.filter((s) => selected.has(s.id))
+    const { error: err, count } = await batchOffboard(chosen, signOffDate, userId)
+    setBusy(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    setDone(`Offboarded ${count} (sign-off ${signOffDate}).`)
+    setSelected(new Set())
+    load()
+  }
+
+  if (loading) return <p className="muted">Loading…</p>
+
+  return (
+    <div className="board-tab">
+      <div className="board-controls">
+        <label className="field">
+          <span>Filter by installation</span>
+          <select value={filterInstallation} onChange={(e) => setFilterInstallation(e.target.value)}>
+            <option value="">All installations</option>
+            {sites.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.name} ({i.type})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Sign-off date *</span>
+          <input type="date" value={signOffDate} onChange={(e) => setSignOffDate(e.target.value)} />
+        </label>
+      </div>
+
+      {error && <p className="banner banner--error">{error}</p>}
+      {done && <p className="banner banner--info">{done}</p>}
+
+      <h3 className="section-heading">Select offshore staff to offboard</h3>
+      <SelectableEmployeeList
+        items={visible}
+        selected={selected}
+        onToggle={toggle}
+        onSelectAll={selectAll}
+        onClear={clear}
+        searchText={(s) =>
+          `${s.employee?.full_name ?? ''} ${s.employee?.emp_id ?? ''} ${s.employee?.designation?.name ?? ''}`
+        }
+        renderPrimary={(s) => s.employee?.full_name ?? '—'}
+        renderMeta={(s) =>
+          `${s.employee?.emp_id ?? ''} · ${s.employee?.designation?.name ?? ''} · 📍 ${
+            s.installation?.name ?? ''
+          } · ${daysInclusive(s.sign_on_date)}d served`
+        }
+        emptyText="Nobody is offshore here."
+      />
+
+      <div className="board-actionbar">
+        <button type="button" className="btn btn--primary" disabled={!canSubmit} onClick={submit}>
+          {busy ? 'Offboarding…' : `Offboard ${selected.size || ''}`.trim()}
         </button>
       </div>
     </div>
