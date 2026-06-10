@@ -17,6 +17,15 @@ export function daysInclusive(startISO, endISO = todayISO()) {
   return Math.floor((end - start) / 86400000) + 1
 }
 
+// Elapsed whole days between two dates (NOT inclusive). Used for rest days:
+// signed off today => 0 days rest. Floors at the raw difference.
+export function daysBetween(startISO, endISO = todayISO()) {
+  if (!startISO) return 0
+  const start = new Date(startISO + 'T00:00:00')
+  const end = new Date(endISO + 'T00:00:00')
+  return Math.floor((end - start) / 86400000)
+}
+
 // Add days to an ISO date, returning ISO.
 export function addDays(startISO, days) {
   if (!startISO) return ''

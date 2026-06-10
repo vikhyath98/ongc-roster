@@ -587,6 +587,12 @@ code {
   margin-bottom: 10px;
 }
 
+.reserve-sub {
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 .roster-clear {
   margin-left: 8px;
 }
