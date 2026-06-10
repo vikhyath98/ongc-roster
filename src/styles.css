@@ -799,6 +799,16 @@ code {
   flex-shrink: 0;
 }
 
+.req-input {
+  width: 72px;
+  font-size: 1rem;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .chip-group {
   display: flex;
   flex-wrap: wrap;
