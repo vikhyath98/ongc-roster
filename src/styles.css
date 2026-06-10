@@ -343,6 +343,19 @@ code {
   cursor: pointer;
 }
 
+.emp-card--select {
+  gap: 12px;
+}
+
+.emp-card--on {
+  border-color: var(--teal);
+  background: rgba(94, 197, 232, 0.08);
+}
+
+.actionbar-spacer {
+  height: 64px;
+}
+
 .emp-card__main {
   display: flex;
   flex-direction: column;
@@ -685,6 +698,45 @@ code {
 .pill.state--red {
   background: rgba(226, 87, 76, 0.18);
   color: #a4231a;
+}
+
+/* ---------- Bulk verify documents ---------- */
+.bulk-types {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bulk-type {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.bulk-type--on {
+  border-color: var(--teal);
+  background: rgba(94, 197, 232, 0.08);
+}
+
+.bulk-type__name {
+  display: flex;
+  flex-direction: column;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.bulk-type__tag {
+  font-size: 0.72rem;
+  font-weight: 400;
 }
 
 /* ---------- Replacement finder ---------- */

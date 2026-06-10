@@ -57,15 +57,17 @@ export async function upsertEmployeeDocument(employeeId, documentTypeId, fields,
 // Pure logic
 // ---------------------------------------------------------------------
 
+// Does one doc type apply to an employee of the given designation? (§6.4)
+export function docTypeApplies(docType, designationId) {
+  return (
+    docType.applies_to_all ||
+    (docType.document_type_designations ?? []).some((m) => m.designation_id === designationId)
+  )
+}
+
 // Which doc types apply to an employee of the given designation.
 export function applicableDocTypes(designationId, docTypes) {
-  return docTypes.filter(
-    (dt) =>
-      dt.applies_to_all ||
-      (dt.document_type_designations ?? []).some(
-        (m) => m.designation_id === designationId
-      )
-  )
+  return docTypes.filter((dt) => docTypeApplies(dt, designationId))
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -93,6 +95,51 @@ export function computeCertStatus(designationId, docTypes, empDocs, today = toda
     else if (state === 'expired') problems.push({ name: dt.name, reason: 'expired' })
   }
   return { certCurrent: problems.length === 0, problems, applicableCount: applicable.length }
+}
+
+// Bulk-verify selected document types for selected employees (§6.4).
+// For each employee × doc type, only apply where the doc type is applicable to
+// that employee's designation; non-applicable pairs are skipped (counted).
+// Shared issue/expiry are applied only when provided (existing dates are
+// preserved otherwise); date-less docs (Aadhaar/PAN) never receive dates.
+// Returns { verified, employeesAffected, skipped, error }.
+export async function bulkVerifyDocuments(employees, docTypeIds, { issueDate, expiryDate }, docTypes, userId) {
+  const selectedTypes = docTypes.filter((dt) => docTypeIds.includes(dt.id))
+  const nowISO = new Date().toISOString()
+  // Decide column shape globally so every row in the batch is consistent.
+  const includeIssue = Boolean(issueDate)
+  const includeExpiry = Boolean(expiryDate)
+
+  const rows = []
+  let totalPairs = 0
+  for (const emp of employees) {
+    for (const dt of selectedTypes) {
+      totalPairs++
+      if (!docTypeApplies(dt, emp.designation_id)) continue // skip silently
+      const dateless = dt.tracks_dates === false
+      const row = {
+        employee_id: emp.id,
+        document_type_id: dt.id,
+        status: 'verified',
+        verified_by: userId ?? null,
+        verified_at: nowISO,
+      }
+      if (includeIssue) row.issue_date = dateless ? null : issueDate
+      if (includeExpiry) row.expiry_date = dateless ? null : expiryDate
+      rows.push(row)
+    }
+  }
+
+  if (rows.length === 0) {
+    return { verified: 0, employeesAffected: 0, skipped: totalPairs, error: null }
+  }
+  const { error } = await supabase
+    .from('employee_documents')
+    .upsert(rows, { onConflict: 'employee_id,document_type_id' })
+  if (error) return { verified: 0, employeesAffected: 0, skipped: 0, error }
+
+  const employeesAffected = new Set(rows.map((r) => r.employee_id)).size
+  return { verified: rows.length, employeesAffected, skipped: totalPairs - rows.length, error: null }
 }
 
 // Suggested expiry from issue date + default validity (e.g. Medical = 365d).

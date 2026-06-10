@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { listEmployees } from '../lib/employees'
 import { listDesignations, listInstallations } from '../lib/reference'
 import { listDocumentTypes, listAllEmployeeDocuments, computeCertStatus } from '../lib/documents'
@@ -6,6 +6,7 @@ import { getAppConfig, configInt } from '../lib/config'
 import EmployeeForm from '../components/EmployeeForm'
 import EmployeeDetail from '../components/EmployeeDetail'
 import EmployeeImport from '../components/EmployeeImport'
+import BulkVerifyDocuments from '../components/BulkVerifyDocuments'
 
 export default function Employees() {
   const [employees, setEmployees] = useState([])
@@ -21,6 +22,10 @@ export default function Employees() {
   const [editing, setEditing] = useState(null)
   const [detail, setDetail] = useState(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const justVerified = useRef(false)
 
   async function load() {
     setLoading(true)
@@ -82,6 +87,36 @@ export default function Employees() {
     load()
   }
 
+  // ----- Selection mode (bulk document verification) -----
+  function enterSelection() {
+    setSelectionMode(true)
+    setSelectedIds(new Set())
+  }
+  function exitSelection() {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }
+  function toggleSelect(id) {
+    setSelectedIds((s) => {
+      const next = new Set(s)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id))
+  function selectAllFiltered() {
+    setSelectedIds(new Set(filtered.map((e) => e.id)))
+  }
+  function closeBulk() {
+    setBulkOpen(false)
+    if (justVerified.current) {
+      justVerified.current = false
+      exitSelection()
+    }
+  }
+  const selectedEmployees = employees.filter((e) => selectedIds.has(e.id))
+
   // Keep the open detail modal pointed at fresh data after a reload.
   const detailEmployee = detail
     ? employees.find((e) => e.id === detail.id) ?? detail
@@ -97,16 +132,33 @@ export default function Employees() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <button type="button" className="btn btn--primary btn--sm" onClick={openAdd}>
-          ＋ Add
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          onClick={() => setImportOpen(true)}
-        >
-          ⬆ Import
-        </button>
+        {selectionMode ? (
+          <>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={allFilteredSelected ? () => setSelectedIds(new Set()) : selectAllFiltered}
+              disabled={filtered.length === 0}
+            >
+              {allFilteredSelected ? 'Unselect all' : 'Select all'}
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={exitSelection}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="btn btn--primary btn--sm" onClick={openAdd}>
+              ＋ Add
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setImportOpen(true)}>
+              ⬆ Import
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={enterSelection}>
+              ☑ Select
+            </button>
+          </>
+        )}
       </div>
 
       {loading && <p className="muted">Loading employees…</p>}
@@ -133,9 +185,24 @@ export default function Employees() {
                   docTypes,
                   docsByEmployee.get(e.id) ?? []
                 )
+                const isSel = selectedIds.has(e.id)
                 return (
                   <li key={e.id}>
-                    <button type="button" className="emp-card" onClick={() => openDetail(e)}>
+                    <button
+                      type="button"
+                      className={
+                        'emp-card' +
+                        (selectionMode ? ' emp-card--select' : '') +
+                        (isSel ? ' emp-card--on' : '')
+                      }
+                      onClick={() => (selectionMode ? toggleSelect(e.id) : openDetail(e))}
+                      aria-pressed={selectionMode ? isSel : undefined}
+                    >
+                      {selectionMode && (
+                        <span className={'pick-card__check' + (isSel ? ' pick-card__check--on' : '')}>
+                          {isSel ? '✓' : ''}
+                        </span>
+                      )}
                       <div className="emp-card__main">
                         <span className="emp-card__name">{e.full_name}</span>
                         <span className="emp-card__meta">
@@ -161,6 +228,8 @@ export default function Employees() {
           )}
         </>
       )}
+
+      {selectionMode && selectedIds.size > 0 && <div className="actionbar-spacer" />}
 
       <EmployeeDetail
         open={Boolean(detailEmployee)}
@@ -191,6 +260,25 @@ export default function Employees() {
         maxServiceDays={maxServiceDays}
         onClose={() => setImportOpen(false)}
         onImported={load}
+      />
+
+      {selectionMode && selectedIds.size > 0 && (
+        <div className="board-actionbar">
+          <button type="button" className="btn btn--primary" onClick={() => setBulkOpen(true)}>
+            Verify Documents ({selectedIds.size})
+          </button>
+        </div>
+      )}
+
+      <BulkVerifyDocuments
+        open={bulkOpen}
+        employees={selectedEmployees}
+        docTypes={docTypes}
+        onDone={() => {
+          justVerified.current = true
+          load()
+        }}
+        onClose={closeBulk}
       />
     </section>
   )
