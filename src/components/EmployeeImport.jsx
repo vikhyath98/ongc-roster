@@ -6,9 +6,19 @@ import {
   importValidRows,
   downloadTemplate,
 } from '../lib/importEmployees'
+import { useAuth } from '../context/AuthContext'
 
 // Bulk .xlsx import with a validated preview (build answers §10).
-export default function EmployeeImport({ open, designations, existingEmpIds, onClose, onImported }) {
+export default function EmployeeImport({
+  open,
+  designations,
+  installations = [],
+  existingEmpIds,
+  maxServiceDays = 70,
+  onClose,
+  onImported,
+}) {
+  const { user } = useAuth()
   const [step, setStep] = useState('select') // select | preview | done
   const [rows, setRows] = useState([])
   const [fileName, setFileName] = useState('')
@@ -37,7 +47,7 @@ export default function EmployeeImport({ open, designations, existingEmpIds, onC
     setBusy(true)
     try {
       const parsed = await parseWorkbook(file)
-      const validated = validateRows(parsed, designations, existingEmpIds)
+      const validated = validateRows(parsed, designations, installations, existingEmpIds)
       setRows(validated)
       setFileName(file.name)
       setStep('preview')
@@ -51,13 +61,16 @@ export default function EmployeeImport({ open, designations, existingEmpIds, onC
   async function handleImport() {
     setBusy(true)
     setError('')
-    const { inserted, error: importErr } = await importValidRows(rows)
+    const { inserted, onboarded, error: importErr } = await importValidRows(rows, {
+      maxServiceDays,
+      userId: user?.id,
+    })
     setBusy(false)
     if (importErr) {
       setError(importErr.message)
       return
     }
-    setResult({ inserted })
+    setResult({ inserted, onboarded })
     setStep('done')
     onImported?.()
   }
@@ -101,8 +114,10 @@ export default function EmployeeImport({ open, designations, existingEmpIds, onC
           <p className="muted">
             Upload an .xlsx with columns <strong>emp_id</strong>,{' '}
             <strong>full_name</strong>, <strong>designation</strong> (required) plus
-            optional <strong>phone</strong> and <strong>notes</strong>. Every row is
-            validated and shown for review before anything is saved.
+            optional <strong>phone</strong>, <strong>notes</strong>,{' '}
+            <strong>location</strong> and <strong>sign_on_date</strong>. Setting a
+            valid location + sign-on date onboards that employee on import. Every
+            row is validated and shown for review before anything is saved.
           </p>
           <label className="btn btn--primary file-btn">
             {busy ? 'Reading…' : 'Choose .xlsx file'}
@@ -155,6 +170,11 @@ export default function EmployeeImport({ open, designations, existingEmpIds, onC
                     {r.data.emp_id || '—'} · {r.data.designation || '—'}
                     {r.data.phone ? ` · ${r.data.phone}` : ''}
                   </span>
+                  {r.data.location_id && r.data.sign_on_date && (
+                    <div className="import-row__onboard">
+                      🚁 Onboard at {r.data.installation_name} from {r.data.sign_on_date}
+                    </div>
+                  )}
                 </div>
                 {!r.valid && (
                   <ul className="import-row__errors">
@@ -173,7 +193,11 @@ export default function EmployeeImport({ open, designations, existingEmpIds, onC
         <div className="import-done">
           <p className="cert-summary cert-summary--ok">
             ✅ Imported {result?.inserted ?? 0} employee
-            {result?.inserted === 1 ? '' : 's'}.
+            {result?.inserted === 1 ? '' : 's'}
+            {result?.onboarded > 0
+              ? `, ${result.onboarded} onboarded to an installation`
+              : ''}
+            .
           </p>
           {invalidCount > 0 && (
             <p className="muted">

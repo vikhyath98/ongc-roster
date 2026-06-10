@@ -51,14 +51,53 @@ try {
   console.log('✓ parsed with zero header errors. Rows:', rows.length)
   console.log('  first row:', JSON.stringify(rows[0]))
 
-  // 3) Sanity-check validation against a designation list incl. the example.
+  // 3) Validate against designations + installations that cover the examples
+  //    (template now includes an already-offshore example at "ICP").
   const designations = [{ id: 'd-cook', name: 'Cook' }]
-  const validated = validateRows(rows, designations, [])
+  const installations = [{ id: 'i-icp', name: 'ICP' }]
+  const validated = validateRows(rows, designations, installations, [])
   const allValid = validated.every((r) => r.valid)
-  console.log(allValid ? '✓ example row validates' : '✗ example row had errors:')
+  console.log(allValid ? '✓ example rows validate' : '✗ example rows had errors:')
   if (!allValid) {
     failed = true
     validated.filter((r) => !r.valid).forEach((r) => console.log('   row', r.rowNumber, r.errors))
+  }
+
+  // 4) The onboarded example row must resolve location + sign-on date.
+  const onboardRow = validated.find((r) => r.data.location_id)
+  if (!onboardRow || onboardRow.data.installation_name !== 'ICP' || !onboardRow.data.sign_on_date) {
+    failed = true
+    console.log('✗ onboarding columns did not resolve as expected')
+  } else {
+    console.log('✓ onboarding row resolved:', onboardRow.data.installation_name, onboardRow.data.sign_on_date)
+  }
+
+  // 5) location without sign_on_date must be rejected with the exact message.
+  const badRows = validateRows(
+    [{ emp_id: 'E9', full_name: 'No Date', designation: 'Cook', phone: '', notes: '', location: 'ICP', sign_on_date: '' }],
+    designations,
+    installations,
+    []
+  )
+  if (badRows[0].valid || !badRows[0].errors.includes('sign_on_date is required when location is provided.')) {
+    failed = true
+    console.log('✗ missing sign_on_date was not rejected correctly:', badRows[0].errors)
+  } else {
+    console.log('✓ location without sign_on_date is rejected')
+  }
+
+  // 6) unknown location must be rejected.
+  const badLoc = validateRows(
+    [{ emp_id: 'E10', full_name: 'Bad Loc', designation: 'Cook', phone: '', notes: '', location: 'NOWHERE', sign_on_date: '2024-01-15' }],
+    designations,
+    installations,
+    []
+  )
+  if (badLoc[0].valid || !badLoc[0].errors.includes('Location not recognised — must match an installation name exactly.')) {
+    failed = true
+    console.log('✗ unknown location was not rejected correctly:', badLoc[0].errors)
+  } else {
+    console.log('✓ unknown location is rejected')
   }
 } catch (err) {
   failed = true

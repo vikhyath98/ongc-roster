@@ -186,7 +186,9 @@ export default function Employees() {
       <EmployeeImport
         open={importOpen}
         designations={designations}
+        installations={installations}
         existingEmpIds={employees.map((e) => e.emp_id)}
+        maxServiceDays={maxServiceDays}
         onClose={() => setImportOpen(false)}
         onImported={load}
       />

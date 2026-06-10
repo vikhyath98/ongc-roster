@@ -739,3 +739,9 @@ code {
   font-size: 0.8rem;
   color: #a4231a;
 }
+
+.import-row__onboard {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #1c6e45;
+}
