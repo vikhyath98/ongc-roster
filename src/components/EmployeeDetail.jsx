@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
 import EmployeeDocChecklist from './EmployeeDocChecklist'
+import RotationHistory from './RotationHistory'
 import { computeCertStatus } from '../lib/documents'
 import { useAuth } from '../context/AuthContext'
 import { employeeRotationCount, setEmploymentStatus, deleteEmployee } from '../lib/employees'
@@ -12,6 +13,7 @@ export default function EmployeeDetail({
   employee,
   docTypes,
   employeeDocs,
+  maxServiceDays = 70,
   onEdit,
   onClose,
   onChanged,
@@ -149,6 +151,9 @@ export default function EmployeeDetail({
         userId={user?.id}
         onChanged={onDocsChanged}
       />
+
+      <h3 className="section-heading">Rotation history</h3>
+      <RotationHistory employeeId={employee.id} maxServiceDays={maxServiceDays} />
 
       <h3 className="section-heading">Manage</h3>
       <div className="manage-box">

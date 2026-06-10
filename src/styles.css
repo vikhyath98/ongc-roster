@@ -700,6 +700,65 @@ code {
   color: #a4231a;
 }
 
+/* ---------- Rotation history ---------- */
+.rot-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.rot-row--over {
+  border-left-color: var(--red);
+}
+
+.rot-row__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rot-row__site {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.rot-row__dates {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.rot-row__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.rot-row__days {
+  font-size: 0.85rem;
+}
+
+.rot-row__over {
+  color: var(--red);
+  font-weight: 600;
+}
+
 /* ---------- Penalty tracker ---------- */
 .penalty-total {
   background: var(--card);

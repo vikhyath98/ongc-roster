@@ -60,6 +60,17 @@ export async function onboardEmployee(
   return { error: mirrorErr }
 }
 
+// All rotation stints for an employee (history), most recent first.
+export async function listEmployeeRotations(employeeId) {
+  return supabase
+    .from('rotation_log')
+    .select(
+      'id,sign_on_date,sign_off_date,expected_rotation_date,installation:installations(name,type)'
+    )
+    .eq('employee_id', employeeId)
+    .order('sign_on_date', { ascending: false })
+}
+
 // Soft delete / reactivate: the standard way to retire someone while keeping
 // all history. Inactive staff are filtered out of operational lists.
 export async function setEmploymentStatus(id, status) {

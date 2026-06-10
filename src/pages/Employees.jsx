@@ -236,6 +236,7 @@ export default function Employees() {
         employee={detailEmployee}
         docTypes={docTypes}
         employeeDocs={detailEmployee ? docsByEmployee.get(detailEmployee.id) ?? [] : []}
+        maxServiceDays={maxServiceDays}
         onEdit={editFromDetail}
         onClose={() => setDetail(null)}
         onChanged={load}
