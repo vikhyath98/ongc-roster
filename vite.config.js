@@ -9,7 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icon.svg'],
+      includeAssets: ['favicon.svg', 'icon.svg', 'apple-touch-icon-180.png'],
       manifest: {
         name: 'ONGC Rotation System',
         short_name: 'ONGC Rotation',
@@ -21,17 +21,31 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         icons: [
-          {
-            src: 'icon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
-            purpose: 'any maskable',
-          },
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          // SVG kept as a scalable fallback for browsers that prefer it.
+          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
         ],
       },
       workbox: {
-        // Network-first for Supabase API calls; precache the app shell.
+        // Precache the app shell; SPA fallback for client-side routes.
         navigateFallback: '/index.html',
+        // Read-only offline: cache successful Supabase GETs and serve them when
+        // offline (roster, employee list, etc. keep their last-seen data).
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) =>
+              url.hostname.endsWith('.supabase.co') && url.pathname.startsWith('/rest/v1'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'supabase-rest',
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 300, maxAgeSeconds: 7 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
       },
       devOptions: {
         enabled: false,

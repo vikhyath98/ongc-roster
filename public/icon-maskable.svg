@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Full-bleed square background so platform masks never reveal transparency.
+       Content sits within the central safe zone (~80%). -->
+  <rect width="512" height="512" fill="#0b3d5c"/>
+  <g transform="translate(0,0) scale(1)">
+    <g fill="none" stroke="#5ec5e8" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M176 356 V214 L256 156 L336 214 V356"/>
+      <path d="M152 356 H360"/>
+      <path d="M256 156 V108"/>
+    </g>
+    <g fill="none" stroke="#f4b740" stroke-width="20" stroke-linecap="round">
+      <path d="M132 256 a124 124 0 0 1 212 -88"/>
+      <path d="M380 256 a124 124 0 0 1 -212 88"/>
+    </g>
+    <polygon points="344,168 352,200 320,194" fill="#f4b740"/>
+    <polygon points="168,344 160,312 192,318" fill="#f4b740"/>
+  </g>
+</svg>

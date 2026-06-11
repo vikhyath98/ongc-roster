@@ -49,4 +49,5 @@ npm run preview
 - [x] **8. Penalty tracker** — live exposure from the penalty view; unreconciled vs reconciled; remark-required reconcile (§5.7, §6.7)
 - [x] **9. Configuration** — thresholds/rates, installations (active toggle), designations, document types (+ mapping), installation requirements (§5.8); plus read-only rotation history on the employee detail
 - [x] **10. Dashboard** — headcount, rotation-window bands, open penalty exposure, needs-attention list (§5.1)
-- [ ] 11. PWA polish + Vercel deploy
+- [x] **11a. PWA polish** — PNG 192/512 + maskable + apple-touch icons; offline read-only (NetworkFirst cache of Supabase GETs)
+- [ ] 11b. Vercel deploy (connect repo + env vars)
