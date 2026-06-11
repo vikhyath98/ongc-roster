@@ -48,5 +48,5 @@ npm run preview
 - [x] **7. Replacement finder + reserve pool** — strict reserve pool (§3.4); ranked same-designation candidates with call/confirm lifecycle (§6.5/§6.6)
 - [x] **8. Penalty tracker** — live exposure from the penalty view; unreconciled vs reconciled; remark-required reconcile (§5.7, §6.7)
 - [x] **9. Configuration** — thresholds/rates, installations (active toggle), designations, document types (+ mapping), installation requirements (§5.8); plus read-only rotation history on the employee detail
-- [ ] 10. Dashboard
+- [x] **10. Dashboard** — headcount, rotation-window bands, open penalty exposure, needs-attention list (§5.1)
 - [ ] 11. PWA polish + Vercel deploy

@@ -890,6 +890,131 @@ code {
   font-weight: 600;
 }
 
+/* ---------- Dashboard ---------- */
+.dash {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dash-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 16px 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.stat-card__num {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--navy);
+  line-height: 1;
+}
+
+.stat-card--muted .stat-card__num {
+  color: var(--muted);
+}
+
+.stat-card__label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.dash-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.dash-card--link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.dash-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.dash-card__head h3 {
+  font-size: 1rem;
+}
+
+.dash-card__sublabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.band-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.band {
+  border-radius: 10px;
+  padding: 12px 8px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--border);
+}
+
+.band__num {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.band__label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.band--teal {
+  border-top-color: var(--teal);
+}
+.band--amber {
+  border-top-color: var(--amber);
+}
+.band--red {
+  border-top-color: var(--red);
+}
+
+.penalty-exposure__value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--red);
+  line-height: 1.1;
+}
+
+.dash-attention-head {
+  margin: 4px 0 -4px;
+}
+
 /* ---------- Penalty tracker ---------- */
 .penalty-total {
   background: var(--card);
