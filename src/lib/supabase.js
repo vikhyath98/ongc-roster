@@ -4,11 +4,23 @@ import { createClient } from '@supabase/supabase-js'
 // Read env defensively: import.meta.env exists under Vite but is undefined in
 // plain Node (e.g. when unit-testing pure helpers that live in this tree).
 const env = import.meta.env ?? {}
-// Normalise the URL: trim whitespace and strip any trailing slash. A stray
-// trailing slash in a hosting env var (e.g. "https://x.supabase.co/") makes the
-// client build "…co//auth/v1/token", which proxies reject as
-// "Invalid path specified in request URL". This keeps production robust to it.
-const supabaseUrl = env.VITE_SUPABASE_URL?.trim().replace(/\/+$/, '')
+
+// Normalise VITE_SUPABASE_URL down to its bare origin (scheme + host). The
+// Supabase client appends its own paths (/auth/v1, /rest/v1, …), so the env
+// var must be just "https://<ref>.supabase.co". A pasted value that includes a
+// path or trailing slash (e.g. ".../rest/v1") otherwise produces broken request
+// URLs like "/rest/v1/auth/v1/token". Reducing to origin makes prod robust to it.
+function normaliseSupabaseUrl(raw) {
+  const v = raw?.trim()
+  if (!v) return v
+  try {
+    return new URL(v).origin
+  } catch {
+    return v.replace(/\/+$/, '')
+  }
+}
+
+const supabaseUrl = normaliseSupabaseUrl(env.VITE_SUPABASE_URL)
 const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY?.trim()
 
 // Fail loudly during development if env vars are missing, rather than
