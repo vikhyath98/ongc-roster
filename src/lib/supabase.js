@@ -4,8 +4,12 @@ import { createClient } from '@supabase/supabase-js'
 // Read env defensively: import.meta.env exists under Vite but is undefined in
 // plain Node (e.g. when unit-testing pure helpers that live in this tree).
 const env = import.meta.env ?? {}
-const supabaseUrl = env.VITE_SUPABASE_URL
-const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY
+// Normalise the URL: trim whitespace and strip any trailing slash. A stray
+// trailing slash in a hosting env var (e.g. "https://x.supabase.co/") makes the
+// client build "…co//auth/v1/token", which proxies reject as
+// "Invalid path specified in request URL". This keeps production robust to it.
+const supabaseUrl = env.VITE_SUPABASE_URL?.trim().replace(/\/+$/, '')
+const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY?.trim()
 
 // Fail loudly during development if env vars are missing, rather than
 // producing confusing auth errors later.

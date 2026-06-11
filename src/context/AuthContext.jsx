@@ -51,6 +51,8 @@ export function AuthProvider({ children }) {
       user: session?.user ?? null,
       profile,
       loading,
+      // Email/password auth needs no redirectTo (that is only for magic links
+      // and OAuth), so none is passed — login works on any domain.
       signIn: (email, password) =>
         supabase.auth.signInWithPassword({ email, password }),
       signOut: () => supabase.auth.signOut(),
