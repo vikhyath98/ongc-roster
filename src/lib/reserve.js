@@ -1,6 +1,5 @@
 import { supabase } from './supabase'
 import { computeCertStatus, listDocumentTypes, listAllEmployeeDocuments } from './documents'
-import { listBaseEmployees } from './boarding'
 import { getAppConfig, configInt } from './config'
 import { daysBetween, todayISO } from './dates'
 
@@ -14,6 +13,20 @@ import { daysBetween, todayISO } from './dates'
 // ---------------------------------------------------------------------
 export async function listAvailability() {
   return supabase.from('availability').select('*')
+}
+
+// All on-base employees (no open stint), regardless of employment_status.
+// Inactive staff are kept so the replacement finder can surface them as
+// blocked (greyed out with a reason) rather than silently hiding them.
+export async function listOnBaseEmployees() {
+  return supabase
+    .from('employees')
+    .select(
+      'id,emp_id,full_name,designation_id,employment_status,current_installation_id,' +
+        'designation:designations(id,name)'
+    )
+    .is('current_installation_id', null)
+    .order('full_name')
 }
 
 // Closed stints, to compute rest days (most recent sign-off per employee).
@@ -37,7 +50,7 @@ export function lastSignOffMap(closedStints) {
 // need: base candidates decorated with cert/rest/availability, plus config.
 export async function loadCandidates() {
   const [baseRes, dtRes, docsRes, avRes, closedRes, cfgRes] = await Promise.all([
-    listBaseEmployees(),
+    listOnBaseEmployees(),
     listDocumentTypes(),
     listAllEmployeeDocuments(),
     listAvailability(),
@@ -95,7 +108,8 @@ export function restDaysFor(employeeId, lastOffMap, today = todayISO()) {
 }
 
 // Assemble base employees into candidate objects with cert, rest, availability.
-// `base` should already be active + on-base (see boarding.listBaseEmployees).
+// `base` is on-base staff of any employment_status (see listOnBaseEmployees);
+// inactive ones carry through so the finder can show them as blocked.
 export function buildBaseCandidates(base, docTypes, docsByEmp, avByEmp, lastOffMap, { minRest = 0, today = todayISO() } = {}) {
   return (base ?? []).map((e) => {
     const cert = computeCertStatus(e.designation_id, docTypes, docsByEmp.get(e.id) ?? [], today)
@@ -136,6 +150,66 @@ export function rankReplacementCandidates(candidates, designationId) {
     if (ca !== cb) return ca - cb
     return a.full_name.localeCompare(b.full_name)
   })
+}
+
+// Display status for a candidate: the single most important reason they are
+// (or aren't) deployable. Order of precedence: inactive > cert > declined >
+// resting > eligible. Used by the Base-staff list and the replacement finder.
+export function candidateStatus(c) {
+  if (c.employment_status === 'inactive') {
+    return { key: 'inactive', label: 'Inactive', reason: 'Inactive — set active to use', blocked: true }
+  }
+  if (!c.cert?.certCurrent) {
+    const names = (c.cert?.problems ?? []).map((p) => `${p.name} (${p.reason})`).join(', ')
+    return { key: 'cert', label: 'Cert issue', reason: names || 'Certificate issue', blocked: true }
+  }
+  if (!c.liveConfirmed && c.availability?.last_call_outcome === 'declined') {
+    return { key: 'declined', label: 'Declined', reason: 'Declined on last call', blocked: true }
+  }
+  if (!c.eligible) {
+    const r = c.restDays != null ? `Resting — only ${c.restDays}d since sign-off` : 'Resting'
+    return { key: 'resting', label: 'Resting', reason: r, blocked: true }
+  }
+  return { key: 'eligible', label: 'Eligible', reason: null, blocked: false }
+}
+
+// Rank order within the "available to call" group: deprioritised (repeated
+// no-answer) last, then fewest calls, then name (§6.5).
+function availableRank(a, b) {
+  const da = isDeprioritised(a)
+  const db = isDeprioritised(b)
+  if (da !== db) return da ? 1 : -1
+  const ca = a.availability?.call_count ?? 0
+  const cb = b.availability?.call_count ?? 0
+  if (ca !== cb) return ca - cb
+  return a.full_name.localeCompare(b.full_name)
+}
+
+// Split a designation's candidates into the three finder sections:
+//   confirmed — live-confirmed, eligible, cert-current, active (ready now)
+//   available — eligible, cert-current, active, not yet confirmed (call them)
+//   blocked   — anything else (cert issue / declined / resting / inactive),
+//               each tagged with its blocking status for display.
+export function splitReplacementGroups(candidates, designationId) {
+  const pool = candidates.filter((c) => c.designation_id === designationId)
+  const confirmed = []
+  const available = []
+  const blocked = []
+  for (const c of pool) {
+    const status = candidateStatus(c)
+    if (status.blocked) {
+      blocked.push({ ...c, status })
+    } else if (c.liveConfirmed) {
+      confirmed.push(c)
+    } else {
+      available.push(c)
+    }
+  }
+  confirmed.sort((a, b) =>
+    (a.availability?.expires_at ?? '').localeCompare(b.availability?.expires_at ?? '')
+  )
+  available.sort(availableRank)
+  return { confirmed, available, blocked }
 }
 
 // ---------------------------------------------------------------------
