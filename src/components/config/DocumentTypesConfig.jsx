@@ -5,6 +5,8 @@ import {
   createDocumentType,
   updateDocumentType,
   setDocTypeDesignations,
+  deleteDocumentType,
+  countEmployeeDocsByType,
 } from '../../lib/configAdmin'
 import Modal from '../Modal'
 
@@ -17,6 +19,10 @@ export default function DocumentTypesConfig() {
   const [editing, setEditing] = useState(null)
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState('')
+  const [counts, setCounts] = useState(new Map())
+  const [deleteFor, setDeleteFor] = useState(null)
+  const [confirmEntire, setConfirmEntire] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   // form state
   const [name, setName] = useState('')
@@ -28,10 +34,15 @@ export default function DocumentTypesConfig() {
 
   async function load() {
     setLoading(true)
-    const [dts, des] = await Promise.all([listDocumentTypes(), listDesignations()])
+    const [dts, des, cnt] = await Promise.all([
+      listDocumentTypes(),
+      listDesignations(),
+      countEmployeeDocsByType(),
+    ])
     if (dts.error) setError(dts.error.message)
     else setItems(dts.data ?? [])
     if (!des.error) setDesignations(des.data ?? [])
+    if (!cnt.error) setCounts(cnt.counts)
     setLoading(false)
   }
 
@@ -115,6 +126,40 @@ export default function DocumentTypesConfig() {
     load()
   }
 
+  function openDelete(dt) {
+    setDeleteFor(dt)
+    setConfirmEntire(false)
+    setDeleteError('')
+  }
+
+  async function removeRequirementOnly() {
+    setBusy(true)
+    setDeleteError('')
+    const { error: err } = await updateDocumentType(deleteFor.id, { is_required: false })
+    setBusy(false)
+    if (err) {
+      setDeleteError(err.message)
+      return
+    }
+    setDeleteFor(null)
+    load()
+  }
+
+  async function deleteEntirely() {
+    setBusy(true)
+    setDeleteError('')
+    const { error: err } = await deleteDocumentType(deleteFor.id)
+    setBusy(false)
+    if (err) {
+      setDeleteError(err.message)
+      return
+    }
+    setDeleteFor(null)
+    load()
+  }
+
+  const deleteCount = deleteFor ? counts.get(deleteFor.id) ?? 0 : 0
+
   if (loading) return <p className="muted">Loading…</p>
   if (error) return <p className="banner banner--error">{error}</p>
 
@@ -141,9 +186,14 @@ export default function DocumentTypesConfig() {
                   {!dt.is_required ? ' · optional' : ''}
                 </span>
               </div>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => openEdit(dt)}>
-                Edit
-              </button>
+              <div className="config-row__actions">
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => openEdit(dt)}>
+                  Edit
+                </button>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => openDelete(dt)}>
+                  Delete
+                </button>
+              </div>
             </li>
           )
         })}
@@ -222,6 +272,83 @@ export default function DocumentTypesConfig() {
 
           {formError && <p className="banner banner--error">{formError}</p>}
         </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteFor)}
+        title="Delete document type"
+        onClose={() => setDeleteFor(null)}
+        footer={
+          deleteCount === 0 || confirmEntire ? (
+            <>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => (confirmEntire ? setConfirmEntire(false) : setDeleteFor(null))}
+                disabled={busy}
+              >
+                {confirmEntire ? 'Back' : 'Cancel'}
+              </button>
+              <button type="button" className="btn btn--danger" disabled={busy} onClick={deleteEntirely}>
+                {busy ? 'Deleting…' : 'Delete entirely'}
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn btn--ghost" onClick={() => setDeleteFor(null)}>
+              Cancel
+            </button>
+          )
+        }
+      >
+        {deleteFor && deleteCount === 0 && (
+          <p>
+            Delete <strong>{deleteFor.name}</strong>? No employee records reference it. This cannot
+            be undone.
+          </p>
+        )}
+
+        {deleteFor && deleteCount > 0 && !confirmEntire && (
+          <>
+            <p>
+              <strong>{deleteCount}</strong> employee document record
+              {deleteCount === 1 ? '' : 's'} reference <strong>{deleteFor.name}</strong>. Choose how
+              to remove it:
+            </p>
+            <div className="form-grid">
+              {deleteFor.is_required && (
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  disabled={busy}
+                  onClick={removeRequirementOnly}
+                >
+                  Remove requirement only (keep records)
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn--danger"
+                disabled={busy}
+                onClick={() => setConfirmEntire(true)}
+              >
+                Delete entirely…
+              </button>
+            </div>
+            <p className="muted field-hint">
+              “Remove requirement only” keeps every record but stops this document counting toward
+              cert-current.
+            </p>
+          </>
+        )}
+
+        {deleteFor && deleteCount > 0 && confirmEntire && (
+          <p className="banner banner--error">
+            This will remove {deleteCount} existing document record
+            {deleteCount === 1 ? '' : 's'}. This cannot be undone.
+          </p>
+        )}
+
+        {deleteError && <p className="banner banner--error">{deleteError}</p>}
       </Modal>
     </div>
   )

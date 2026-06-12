@@ -66,6 +66,42 @@ export async function updateDesignation(id, { name, category_id }) {
   return { data, error: friendly(error, 'That designation already exists in this category.') }
 }
 
+// How many employees currently use each designation, keyed by designation_id.
+export async function countEmployeesByDesignation() {
+  const { data, error } = await supabase.from('employees').select('designation_id')
+  if (error) return { counts: new Map(), error }
+  const counts = new Map()
+  for (const r of data ?? []) {
+    counts.set(r.designation_id, (counts.get(r.designation_id) ?? 0) + 1)
+  }
+  return { counts, error: null }
+}
+
+// Safe delete: only when no employee uses the designation (hard block, also
+// enforced by the FK). Clears its installation-requirement config first so the
+// requirements FK doesn't block the delete; document mappings cascade.
+export async function deleteDesignation(id) {
+  const { count, error: cErr } = await supabase
+    .from('employees')
+    .select('id', { count: 'exact', head: true })
+    .eq('designation_id', id)
+  if (cErr) return { error: cErr }
+  if ((count ?? 0) > 0) {
+    return {
+      error: {
+        message: `Cannot delete — ${count} employee${count === 1 ? '' : 's'} use this designation. Set them to a different designation first.`,
+      },
+    }
+  }
+  const { error: reqErr } = await supabase
+    .from('installation_requirements')
+    .delete()
+    .eq('designation_id', id)
+  if (reqErr) return { error: reqErr }
+  const { error } = await supabase.from('designations').delete().eq('id', id)
+  return { error }
+}
+
 // ----- document types + the many-to-many designation mapping -----
 const DOC_SELECT =
   'id,name,is_required,applies_to_all,default_validity_days,tracks_dates,' +
@@ -88,6 +124,30 @@ export async function updateDocumentType(id, fields) {
     .select(DOC_SELECT)
     .single()
   return { data, error: friendly(error, 'A document type with that name already exists.') }
+}
+
+// How many employee_documents rows reference each document type, keyed by id.
+export async function countEmployeeDocsByType() {
+  const { data, error } = await supabase.from('employee_documents').select('document_type_id')
+  if (error) return { counts: new Map(), error }
+  const counts = new Map()
+  for (const r of data ?? []) {
+    counts.set(r.document_type_id, (counts.get(r.document_type_id) ?? 0) + 1)
+  }
+  return { counts, error: null }
+}
+
+// Delete a document type entirely. Cascades to existing employee_documents
+// (deleted explicitly first, since that FK does not cascade) and to the
+// designation mappings (which do cascade on the type delete).
+export async function deleteDocumentType(id) {
+  const { error: edErr } = await supabase
+    .from('employee_documents')
+    .delete()
+    .eq('document_type_id', id)
+  if (edErr) return { error: edErr }
+  const { error } = await supabase.from('document_types').delete().eq('id', id)
+  return { error }
 }
 
 function normaliseDocType(f) {

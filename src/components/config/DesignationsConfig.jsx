@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react'
 import { listDesignations, listCategories } from '../../lib/reference'
-import { createDesignation, updateDesignation } from '../../lib/configAdmin'
+import {
+  createDesignation,
+  updateDesignation,
+  deleteDesignation,
+  countEmployeesByDesignation,
+} from '../../lib/configAdmin'
 import Modal from '../Modal'
 
 export default function DesignationsConfig() {
   const [items, setItems] = useState([])
   const [categories, setCategories] = useState([])
+  const [counts, setCounts] = useState(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -14,13 +20,20 @@ export default function DesignationsConfig() {
   const [categoryId, setCategoryId] = useState('')
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState('')
+  const [deleteFor, setDeleteFor] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
 
   async function load() {
     setLoading(true)
-    const [des, cat] = await Promise.all([listDesignations(), listCategories()])
+    const [des, cat, cnt] = await Promise.all([
+      listDesignations(),
+      listCategories(),
+      countEmployeesByDesignation(),
+    ])
     if (des.error) setError(des.error.message)
     else setItems(des.data ?? [])
     if (!cat.error) setCategories(cat.data ?? [])
+    if (!cnt.error) setCounts(cnt.counts)
     setLoading(false)
   }
 
@@ -62,6 +75,26 @@ export default function DesignationsConfig() {
     load()
   }
 
+  function openDelete(d) {
+    setDeleteFor(d)
+    setDeleteError('')
+  }
+
+  async function doDelete() {
+    setBusy(true)
+    setDeleteError('')
+    const { error: err } = await deleteDesignation(deleteFor.id)
+    setBusy(false)
+    if (err) {
+      setDeleteError(err.message)
+      return
+    }
+    setDeleteFor(null)
+    load()
+  }
+
+  const deleteCount = deleteFor ? counts.get(deleteFor.id) ?? 0 : 0
+
   if (loading) return <p className="muted">Loading…</p>
   if (error) return <p className="banner banner--error">{error}</p>
 
@@ -75,17 +108,32 @@ export default function DesignationsConfig() {
       </div>
 
       <ul className="config-list">
-        {items.map((d) => (
-          <li key={d.id} className="config-row">
-            <div className="config-row__main">
-              <span className="config-row__title">{d.name}</span>
-              <span className="config-row__sub">{d.category?.name ?? '—'}</span>
-            </div>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => openEdit(d)}>
-              Edit
-            </button>
-          </li>
-        ))}
+        {items.map((d) => {
+          const n = counts.get(d.id) ?? 0
+          return (
+            <li key={d.id} className="config-row">
+              <div className="config-row__main">
+                <span className="config-row__title">{d.name}</span>
+                <span className="config-row__sub">
+                  {d.category?.name ?? '—'} · {n} employee{n === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div className="config-row__actions">
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => openEdit(d)}>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => openDelete(d)}
+                  title={n > 0 ? `${n} employee(s) use this designation` : 'Delete'}
+                >
+                  Delete
+                </button>
+              </div>
+            </li>
+          )
+        })}
       </ul>
 
       <Modal
@@ -121,6 +169,42 @@ export default function DesignationsConfig() {
           </label>
           {formError && <p className="banner banner--error">{formError}</p>}
         </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteFor)}
+        title="Delete designation"
+        onClose={() => setDeleteFor(null)}
+        footer={
+          deleteCount > 0 ? (
+            <button type="button" className="btn btn--primary" onClick={() => setDeleteFor(null)}>
+              Close
+            </button>
+          ) : (
+            <>
+              <button type="button" className="btn btn--ghost" onClick={() => setDeleteFor(null)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn--danger" disabled={busy} onClick={doDelete}>
+                {busy ? 'Deleting…' : 'Delete'}
+              </button>
+            </>
+          )
+        }
+      >
+        {deleteFor &&
+          (deleteCount > 0 ? (
+            <p className="banner banner--error">
+              Cannot delete — {deleteCount} employee{deleteCount === 1 ? '' : 's'} use this
+              designation. Set them to a different designation first.
+            </p>
+          ) : (
+            <p>
+              Permanently delete <strong>{deleteFor.name}</strong>? No employees use it. This cannot
+              be undone.
+            </p>
+          ))}
+        {deleteError && <p className="banner banner--error">{deleteError}</p>}
       </Modal>
     </div>
   )

@@ -81,17 +81,33 @@ export default function InstallationsConfig() {
         </button>
       </div>
 
+      <p className="banner banner--info">
+        Installations are never deleted — rotation history is tied to them. Toggle one to{' '}
+        <strong>Deactivated</strong> to retire it: deactivated installations are hidden from
+        boarding and replacement, but their history is preserved.
+      </p>
+
       <ul className="config-list">
         {items.map((it) => (
           <li key={it.id} className="config-row">
             <div className="config-row__main">
               <span className="config-row__title">
-                {it.name} {!it.is_active && <span className="pill pill--muted">Inactive</span>}
+                {it.name}{' '}
+                {!it.is_active && <span className="pill pill--muted">Deactivated</span>}
               </span>
-              <span className="config-row__sub">{it.type}</span>
+              <span className="config-row__sub">
+                {it.type} · {it.is_active ? 'Active' : 'Deactivated'}
+              </span>
             </div>
             <div className="config-row__actions">
-              <label className="switch" title={it.is_active ? 'Active' : 'Inactive'}>
+              <label
+                className="switch"
+                title={
+                  it.is_active
+                    ? 'Active — tap to deactivate (hides from boarding/replacement, keeps history)'
+                    : 'Deactivated — tap to reactivate'
+                }
+              >
                 <input type="checkbox" checked={it.is_active} onChange={() => toggleActive(it)} />
                 <span className="switch__track" />
               </label>
