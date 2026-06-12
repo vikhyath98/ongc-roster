@@ -32,7 +32,7 @@ export default function Employees() {
     const [emp, des, inst, dts, eds, cfg] = await Promise.all([
       listEmployees(),
       listDesignations(),
-      listInstallations({ activeOnly: true }),
+      listInstallations(),
       listDocumentTypes(),
       listAllEmployeeDocuments(),
       getAppConfig(),
@@ -50,6 +50,13 @@ export default function Employees() {
   useEffect(() => {
     load()
   }, [])
+
+  // The add/edit form only onboards to live installations; import/export must
+  // match history against every installation (including deactivated ones).
+  const activeInstallations = useMemo(
+    () => installations.filter((i) => i.is_active),
+    [installations]
+  )
 
   // Group documents by employee once, for cert badges.
   const docsByEmployee = useMemo(() => {
@@ -152,7 +159,7 @@ export default function Employees() {
               ＋ Add
             </button>
             <button type="button" className="btn btn--ghost btn--sm" onClick={() => setImportOpen(true)}>
-              ⬆ Import
+              ⇅ Import / Export
             </button>
             <button type="button" className="btn btn--ghost btn--sm" onClick={enterSelection}>
               ☑ Select
@@ -247,7 +254,7 @@ export default function Employees() {
         open={formOpen}
         employee={editing}
         designations={designations}
-        installations={installations}
+        installations={activeInstallations}
         maxServiceDays={maxServiceDays}
         onClose={() => setFormOpen(false)}
         onSaved={handleSaved}

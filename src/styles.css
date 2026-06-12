@@ -387,6 +387,7 @@ code {
 /* ---------- Toolbar / search ---------- */
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -1599,6 +1600,13 @@ code {
   padding-left: 18px;
   font-size: 0.8rem;
   color: #a4231a;
+}
+
+.import-row__warnings {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: #8a6300;
 }
 
 .import-row__onboard {
