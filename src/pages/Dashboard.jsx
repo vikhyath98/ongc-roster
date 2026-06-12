@@ -133,7 +133,7 @@ export default function Dashboard() {
         <div className="band-row">
           <div className="band band--teal">
             <span className="band__num">{bands.eligible}</span>
-            <span className="band__label">Eligible<br />{thresholds.min}–{thresholds.warning - 1}d</span>
+            <span className="band__label">Plan Rotation<br />{thresholds.min}–{thresholds.warning - 1}d</span>
           </div>
           <div className="band band--amber">
             <span className="band__num">{bands.warning}</span>

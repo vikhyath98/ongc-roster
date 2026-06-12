@@ -8,7 +8,7 @@
 
 export const ROTATION_STATES = {
   in_service: { label: 'In service', cls: 'state--green' },
-  eligible: { label: 'Eligible', cls: 'state--teal' },
+  eligible: { label: 'Plan Rotation', cls: 'state--teal' },
   warning: { label: 'Warning', cls: 'state--amber' },
   over: { label: 'Over threshold', cls: 'state--red' },
 }
