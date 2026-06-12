@@ -6,8 +6,6 @@ import Dashboard from './pages/Dashboard'
 import Employees from './pages/Employees'
 import Roster from './pages/Roster'
 import Boarding from './pages/Boarding'
-import Replacement from './pages/Replacement'
-import Reserve from './pages/Reserve'
 import Penalties from './pages/Penalties'
 import Configuration from './pages/Configuration'
 
@@ -27,8 +25,6 @@ export default function App() {
         <Route path="employees" element={<Employees />} />
         <Route path="roster" element={<Roster />} />
         <Route path="boarding" element={<Boarding />} />
-        <Route path="replacement" element={<Replacement />} />
-        <Route path="reserve" element={<Reserve />} />
         <Route path="penalties" element={<Penalties />} />
         <Route path="configuration" element={<Configuration />} />
       </Route>

@@ -1,17 +1,23 @@
 import { NavLink } from 'react-router-dom'
 
-// The 8 modules from SPEC.md §5. Short labels + glyphs so they fit a phone.
-// Horizontally scrollable so all 8 are reachable one-handed.
+// Primary bottom nav — 4 thumb-friendly destinations, no horizontal scroll.
+// Find replacement + the reserve pool now live inside Roster; Employee Master
+// and Configuration moved to the header menu (see MENU_ITEMS).
 export const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: '🏠', end: true },
-  { to: '/employees', label: 'Staff', icon: '👤' },
   { to: '/roster', label: 'Roster', icon: '📋' },
   { to: '/boarding', label: 'Board', icon: '🚁' },
-  { to: '/replacement', label: 'Replace', icon: '🔁' },
-  { to: '/reserve', label: 'Reserve', icon: '✅' },
   { to: '/penalties', label: 'Penalty', icon: '⚠️' },
-  { to: '/configuration', label: 'Config', icon: '⚙️' },
 ]
+
+// Secondary destinations, reached from the header hamburger menu.
+export const MENU_ITEMS = [
+  { to: '/employees', label: 'Employee Master', icon: '👤' },
+  { to: '/configuration', label: 'Configuration', icon: '⚙️' },
+]
+
+// All routable destinations, for the header to resolve the current page title.
+export const ALL_NAV = [...NAV_ITEMS, ...MENU_ITEMS]
 
 export default function BottomNav() {
   return (

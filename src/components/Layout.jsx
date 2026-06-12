@@ -1,16 +1,19 @@
+import { useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import BottomNav, { NAV_ITEMS } from './BottomNav'
+import BottomNav, { ALL_NAV } from './BottomNav'
+import SettingsMenu from './SettingsMenu'
 
 export default function Layout() {
   const { user, profile, signOut } = useAuth()
   const location = useLocation()
+  const [menuOpen, setMenuOpen] = useState(false)
   const who = profile?.full_name || user?.email || 'Signed in'
 
   const current =
-    NAV_ITEMS.find((i) =>
+    ALL_NAV.find((i) =>
       i.end ? location.pathname === i.to : location.pathname.startsWith(i.to)
-    ) ?? NAV_ITEMS[0]
+    ) ?? ALL_NAV[0]
 
   return (
     <div className="app-shell">
@@ -21,11 +24,13 @@ export default function Layout() {
         </div>
         <button
           type="button"
-          className="app-header__signout"
-          onClick={() => signOut()}
-          title={`${who} — tap to sign out`}
+          className="app-header__menu"
+          onClick={() => setMenuOpen(true)}
+          aria-label="Menu"
+          aria-haspopup="true"
+          aria-expanded={menuOpen}
         >
-          Sign out
+          ☰
         </button>
       </header>
 
@@ -34,6 +39,16 @@ export default function Layout() {
       </main>
 
       <BottomNav />
+
+      <SettingsMenu
+        open={menuOpen}
+        who={who}
+        onClose={() => setMenuOpen(false)}
+        onSignOut={() => {
+          setMenuOpen(false)
+          signOut()
+        }}
+      />
     </div>
   )
 }

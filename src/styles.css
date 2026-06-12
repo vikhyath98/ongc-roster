@@ -91,14 +91,112 @@ code {
   font-weight: 600;
 }
 
-.app-header__signout {
+.app-header__menu {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   border: none;
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-size: 0.85rem;
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  font-size: 1.3rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ---------- Settings drawer ---------- */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(15, 27, 38, 0.45);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer {
+  width: min(82%, 320px);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  padding-top: calc(16px + env(safe-area-inset-top));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.16);
+  animation: drawer-in 0.18s ease-out;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 14px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.drawer__who {
+  font-weight: 600;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer__close {
+  border: none;
+  background: transparent;
+  font-size: 1.1rem;
+  color: var(--muted);
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+
+.drawer__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.drawer__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 12px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 0.98rem;
   font-weight: 500;
+}
+
+.drawer__item--active {
+  background: rgba(94, 197, 232, 0.12);
+  color: var(--navy);
+  font-weight: 600;
+}
+
+.drawer__item-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.drawer__signout {
+  width: 100%;
+  margin-top: 8px;
 }
 
 .app-main {
@@ -122,13 +220,11 @@ code {
   display: flex;
   background: var(--card);
   border-top: 1px solid var(--border);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .bottom-nav__item {
-  flex: 1 0 auto;
-  min-width: 64px;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
