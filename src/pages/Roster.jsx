@@ -83,28 +83,22 @@ export default function Roster() {
     return [...m.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [stints])
 
-  const groups = useMemo(() => {
-    const decorated = stints
-      .filter((s) => !fInstall || s.installation_id === fInstall)
-      .filter((s) => !fDesig || s.employee?.designation?.id === fDesig)
-      .map((s) => {
-        const days = daysInclusive(s.sign_on_date)
-        return { ...s, days, state: rotationState(days, thresholds) }
-      })
-    const byInstall = new Map()
-    for (const s of decorated) {
-      const key = s.installation?.id ?? 'unknown'
-      if (!byInstall.has(key)) byInstall.set(key, { installation: s.installation, people: [] })
-      byInstall.get(key).people.push(s)
-    }
-    const list = [...byInstall.values()]
-    list.sort((a, b) => (a.installation?.name ?? '').localeCompare(b.installation?.name ?? ''))
-    for (const g of list) g.people.sort((a, b) => b.days - a.days)
-    return list
-  }, [stints, thresholds, fInstall, fDesig])
+  // Flat, urgency-sorted offshore list (most days served first), filtered.
+  const offshoreList = useMemo(
+    () =>
+      stints
+        .filter((s) => !fInstall || s.installation_id === fInstall)
+        .filter((s) => !fDesig || s.employee?.designation?.id === fDesig)
+        .map((s) => {
+          const days = daysInclusive(s.sign_on_date)
+          return { ...s, days, state: rotationState(days, thresholds) }
+        })
+        .sort((a, b) => b.days - a.days),
+    [stints, thresholds, fInstall, fDesig]
+  )
 
   const total = stints.length
-  const shown = groups.reduce((n, g) => n + g.people.length, 0)
+  const shown = offshoreList.length
   const filtered = Boolean(fInstall || fDesig)
 
   // ----- Base tab: active on-base staff (the reserve pool) -----
@@ -252,8 +246,7 @@ export default function Roster() {
           )}
 
           <p className="list-count muted">
-            {filtered ? `${shown} of ${total} offshore` : `${total} offshore`} across{' '}
-            {groups.length} installation{groups.length === 1 ? '' : 's'}
+            {filtered ? `${shown} of ${total} offshore` : `${total} offshore`}
             {filtered && (
               <button
                 type="button"
@@ -273,62 +266,44 @@ export default function Roster() {
           ) : shown === 0 ? (
             <p className="muted empty-state">No offshore staff match these filters.</p>
           ) : (
-            groups.map((g) => {
-              const over = g.people.filter((p) => p.state.key === 'over').length
-              const warn = g.people.filter((p) => p.state.key === 'warning').length
-              return (
-                <div className="roster-group" key={g.installation?.id ?? 'unknown'}>
-                  <div className="roster-group__head">
-                    <h3 className="roster-group__title">
-                      {g.installation?.name ?? 'Unknown'}{' '}
-                      <span className="muted">({g.installation?.type})</span>
-                    </h3>
-                    <span className="roster-group__count">
-                      {g.people.length}
-                      {over > 0 && <span className="dot dot--red"> ● {over} over</span>}
-                      {warn > 0 && <span className="dot dot--amber"> ● {warn} warning</span>}
-                    </span>
-                  </div>
-
-                  <ul className="card-list">
-                    {g.people.map((p) => {
-                      const canReplace = p.days >= thresholds.min
-                      return (
-                        <li key={p.id}>
-                          <div className={`roster-card roster-card--col ${p.state.cls}`}>
-                            <div className="roster-card__row">
-                              <div className="emp-card__main">
-                                <span className="emp-card__name">
-                                  {p.employee?.full_name ?? '—'}
-                                </span>
-                                <span className="emp-card__meta">
-                                  {p.employee?.emp_id} · {p.employee?.designation?.name ?? '—'}
-                                </span>
-                              </div>
-                              <div className="roster-card__side">
-                                <span className={`pill ${p.state.cls}`}>{p.state.label}</span>
-                                <span className="roster-card__days">
-                                  <strong>{p.days}</strong>d
-                                </span>
-                              </div>
-                            </div>
-                            {canReplace && (
-                              <button
-                                type="button"
-                                className="btn btn--ghost btn--sm roster-card__action"
-                                onClick={() => openReplace(p.id)}
-                              >
-                                🔁 Find replacement
-                              </button>
-                            )}
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              )
-            })
+            <ul className="card-list">
+              {offshoreList.map((p) => {
+                const canReplace = p.days >= thresholds.min
+                return (
+                  <li key={p.id}>
+                    <div className={`roster-card roster-card--col ${p.state.cls}`}>
+                      <div className="roster-card__row">
+                        <div className="emp-card__main">
+                          <span className="emp-card__name">{p.employee?.full_name ?? '—'}</span>
+                          <span className="emp-card__meta">
+                            {p.employee?.emp_id} · {p.employee?.designation?.name ?? '—'}
+                          </span>
+                          <span className="reserve-sub">
+                            📍 {p.installation?.name ?? '—'} · rotate by{' '}
+                            {p.expected_rotation_date || deadlineFor(p)}
+                          </span>
+                        </div>
+                        <div className="roster-card__side">
+                          <span className={`pill ${p.state.cls}`}>{p.state.label}</span>
+                          <span className="roster-card__days">
+                            <strong>{p.days}</strong>d
+                          </span>
+                        </div>
+                      </div>
+                      {canReplace && (
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm roster-card__action"
+                          onClick={() => openReplace(p.id)}
+                        >
+                          🔁 Find replacement
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
           )}
         </>
       )}
