@@ -1402,6 +1402,25 @@ code {
   background: rgba(94, 197, 232, 0.08);
 }
 
+.pick-card--disabled {
+  opacity: 0.55;
+  background: rgba(107, 124, 140, 0.06);
+  cursor: not-allowed;
+}
+
+.pick-card__extra {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cert-block {
+  font-size: 0.74rem;
+  color: #a4231a;
+  font-weight: 600;
+}
+
 .pick-card__check {
   flex-shrink: 0;
   width: 24px;

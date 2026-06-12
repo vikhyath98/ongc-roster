@@ -3,6 +3,10 @@ import { useMemo, useState } from 'react'
 // Searchable, multi-select list of people. Used by both onboard (base staff)
 // and offboard (offshore staff). `items` each need an `id`; `searchText` and
 // `renderMeta` adapt it to either context.
+//
+// `isDisabled(item)` marks a row unselectable (e.g. cert not current) — it is
+// greyed out and cannot be toggled or bulk-selected. `renderExtra(item)` adds
+// a third line inside the card (a badge or a blocking reason).
 export default function SelectableEmployeeList({
   items,
   selected,
@@ -12,6 +16,8 @@ export default function SelectableEmployeeList({
   searchText,
   renderPrimary,
   renderMeta,
+  renderExtra,
+  isDisabled = () => false,
   emptyText = 'Nobody here.',
 }) {
   const [query, setQuery] = useState('')
@@ -22,8 +28,9 @@ export default function SelectableEmployeeList({
     return items.filter((it) => searchText(it).toLowerCase().includes(q))
   }, [items, query, searchText])
 
+  const selectable = useMemo(() => filtered.filter((it) => !isDisabled(it)), [filtered, isDisabled])
   const allVisibleSelected =
-    filtered.length > 0 && filtered.every((it) => selected.has(it.id))
+    selectable.length > 0 && selectable.every((it) => selected.has(it.id))
 
   return (
     <div className="select-list">
@@ -43,8 +50,8 @@ export default function SelectableEmployeeList({
           <button
             type="button"
             className="linkish"
-            onClick={() => onSelectAll(filtered.map((it) => it.id))}
-            disabled={filtered.length === 0 || allVisibleSelected}
+            onClick={() => onSelectAll(selectable.map((it) => it.id))}
+            disabled={selectable.length === 0 || allVisibleSelected}
           >
             Select all
           </button>
@@ -59,14 +66,22 @@ export default function SelectableEmployeeList({
       ) : (
         <ul className="card-list">
           {filtered.map((it) => {
+            const disabled = isDisabled(it)
             const isSel = selected.has(it.id)
+            const extra = renderExtra ? renderExtra(it) : null
             return (
               <li key={it.id}>
                 <button
                   type="button"
-                  className={'pick-card' + (isSel ? ' pick-card--on' : '')}
-                  onClick={() => onToggle(it.id)}
-                  aria-pressed={isSel}
+                  className={
+                    'pick-card' +
+                    (isSel ? ' pick-card--on' : '') +
+                    (disabled ? ' pick-card--disabled' : '')
+                  }
+                  onClick={() => !disabled && onToggle(it.id)}
+                  aria-pressed={disabled ? undefined : isSel}
+                  aria-disabled={disabled || undefined}
+                  disabled={disabled}
                 >
                   <span className={'pick-card__check' + (isSel ? ' pick-card__check--on' : '')}>
                     {isSel ? '✓' : ''}
@@ -74,6 +89,7 @@ export default function SelectableEmployeeList({
                   <span className="pick-card__main">
                     <span className="emp-card__name">{renderPrimary(it)}</span>
                     <span className="emp-card__meta">{renderMeta(it)}</span>
+                    {extra && <span className="pick-card__extra">{extra}</span>}
                   </span>
                 </button>
               </li>

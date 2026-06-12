@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listBaseEmployees, listOffshoreStints, batchOnboard, batchOffboard } from '../lib/boarding'
+import { listOffshoreStints, batchOnboard, batchOffboard } from '../lib/boarding'
+import { loadCandidates } from '../lib/reserve'
 import { listInstallations } from '../lib/reference'
-import { getAppConfig, configInt } from '../lib/config'
+import {
+  listDocumentTypes,
+  listAllEmployeeDocuments,
+  computeCertStatus,
+} from '../lib/documents'
 import { useAuth } from '../context/AuthContext'
 import { todayISO, addDays, daysInclusive } from '../lib/dates'
 import SelectableEmployeeList from '../components/SelectableEmployeeList'
+import Modal from '../components/Modal'
 
 export default function Boarding() {
   const { user } = useAuth()
@@ -34,6 +40,13 @@ export default function Boarding() {
   )
 }
 
+// First failing required document, formatted "Name reason" (e.g. "Medical
+// Fitness Certificate expired") for the inline cert-block message.
+function blockingDoc(cert) {
+  const p = cert.problems?.[0]
+  return p ? `${p.name} ${p.reason}` : 'cert not current'
+}
+
 function OnboardTab({ userId }) {
   const [base, setBase] = useState([])
   const [installations, setInstallations] = useState([])
@@ -45,18 +58,18 @@ function OnboardTab({ userId }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   async function load() {
     setLoading(true)
-    const [baseRes, instRes, cfgRes] = await Promise.all([
-      listBaseEmployees(),
+    const [candRes, instRes] = await Promise.all([
+      loadCandidates(),
       listInstallations({ activeOnly: true }),
-      getAppConfig(),
     ])
-    if (baseRes.error) setError(baseRes.error.message)
-    else setBase(baseRes.data ?? [])
+    if (candRes.error) setError(candRes.error.message)
+    else setBase((candRes.candidates ?? []).filter((c) => c.employment_status === 'active'))
     if (!instRes.error) setInstallations(instRes.data ?? [])
-    if (!cfgRes.error) setMaxServiceDays(configInt(cfgRes.config, 'max_service_days', 70))
+    if (candRes.thresholds) setMaxServiceDays(candRes.thresholds.max)
     setLoading(false)
   }
 
@@ -79,7 +92,25 @@ function OnboardTab({ userId }) {
   const expected = signOnDate ? addDays(signOnDate, maxServiceDays) : ''
   const canSubmit = installationId && signOnDate && selected.size > 0 && !busy
 
+  // Cert gate (hard) + confirmation warning (soft) per candidate.
+  const isCertBlocked = (c) => !c.cert.certCurrent
+
+  const selectedNotConfirmed = useMemo(
+    () => base.filter((c) => selected.has(c.id) && !c.liveConfirmed),
+    [base, selected]
+  )
+
+  function attemptSubmit() {
+    if (!canSubmit) return
+    if (selectedNotConfirmed.length > 0) {
+      setConfirmOpen(true)
+      return
+    }
+    submit()
+  }
+
   async function submit() {
+    setConfirmOpen(false)
     setBusy(true)
     setError('')
     setDone('')
@@ -127,31 +158,69 @@ function OnboardTab({ userId }) {
       {done && <p className="banner banner--info">{done}</p>}
 
       <h3 className="section-heading">Select base staff to onboard</h3>
+      <p className="field-hint muted">
+        Staff without current certificates are greyed out and cannot be boarded.
+      </p>
       <SelectableEmployeeList
         items={base}
         selected={selected}
         onToggle={toggle}
         onSelectAll={selectAll}
         onClear={clear}
+        isDisabled={isCertBlocked}
         searchText={(e) => `${e.full_name} ${e.emp_id} ${e.designation?.name ?? ''}`}
         renderPrimary={(e) => e.full_name}
         renderMeta={(e) => `${e.emp_id} · ${e.designation?.name ?? 'No designation'}`}
+        renderExtra={(e) =>
+          isCertBlocked(e) ? (
+            <span className="cert-block">⛔ {blockingDoc(e.cert)}</span>
+          ) : !e.liveConfirmed ? (
+            <span className="pill pill--warn">Not confirmed</span>
+          ) : null
+        }
         emptyText="No base staff available to onboard."
       />
 
       <div className="board-actionbar">
-        <button type="button" className="btn btn--primary" disabled={!canSubmit} onClick={submit}>
+        <button type="button" className="btn btn--primary" disabled={!canSubmit} onClick={attemptSubmit}>
           {busy
             ? 'Onboarding…'
             : `Onboard ${selected.size || ''}${installation ? ` → ${installation.name}` : ''}`.trim()}
         </button>
       </div>
+
+      <Modal
+        open={confirmOpen}
+        title="Board unconfirmed staff?"
+        onClose={() => setConfirmOpen(false)}
+        footer={
+          <>
+            <button type="button" className="btn btn--ghost" onClick={() => setConfirmOpen(false)}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn--primary" onClick={submit}>
+              Board anyway
+            </button>
+          </>
+        }
+      >
+        <p>
+          {selectedNotConfirmed.length} of the selected employees{' '}
+          {selectedNotConfirmed.length === 1 ? 'has' : 'have'} not confirmed availability:
+        </p>
+        <p>
+          <strong>{selectedNotConfirmed.map((c) => c.full_name).join(', ')}</strong>
+        </p>
+        <p className="muted">Board them anyway?</p>
+      </Modal>
     </div>
   )
 }
 
 function OffboardTab({ userId }) {
   const [stints, setStints] = useState([])
+  const [docTypes, setDocTypes] = useState([])
+  const [docsByEmp, setDocsByEmp] = useState(new Map())
   const [filterInstallation, setFilterInstallation] = useState('')
   const [signOffDate, setSignOffDate] = useState(todayISO())
   const [selected, setSelected] = useState(new Set())
@@ -162,15 +231,36 @@ function OffboardTab({ userId }) {
 
   async function load() {
     setLoading(true)
-    const { data, error: err } = await listOffshoreStints()
-    if (err) setError(err.message)
-    else setStints(data ?? [])
+    const [stintRes, dtRes, docsRes] = await Promise.all([
+      listOffshoreStints(),
+      listDocumentTypes(),
+      listAllEmployeeDocuments(),
+    ])
+    if (stintRes.error) setError(stintRes.error.message)
+    else setStints(stintRes.data ?? [])
+    if (!dtRes.error) setDocTypes(dtRes.data ?? [])
+    if (!docsRes.error) {
+      const m = new Map()
+      for (const d of docsRes.data ?? []) {
+        if (!m.has(d.employee_id)) m.set(d.employee_id, [])
+        m.get(d.employee_id).push(d)
+      }
+      setDocsByEmp(m)
+    }
     setLoading(false)
   }
 
   useEffect(() => {
     load()
   }, [])
+
+  // Read-only cert status per offshore employee (awareness only — no gate).
+  const certFor = (s) =>
+    computeCertStatus(
+      s.employee?.designation?.id,
+      docTypes,
+      docsByEmp.get(s.employee?.id) ?? []
+    )
 
   // Installations present offshore, for the filter dropdown.
   const sites = useMemo(() => {
@@ -254,6 +344,16 @@ function OffboardTab({ userId }) {
             s.installation?.name ?? ''
           } · ${daysInclusive(s.sign_on_date)}d served`
         }
+        renderExtra={(s) => {
+          const cert = certFor(s)
+          return cert.certCurrent ? (
+            <span className="pill pill--ok">Certs OK</span>
+          ) : (
+            <span className="pill pill--bad">
+              {cert.problems.length} cert issue{cert.problems.length === 1 ? '' : 's'}
+            </span>
+          )
+        }}
         emptyText="Nobody is offshore here."
       />
 
