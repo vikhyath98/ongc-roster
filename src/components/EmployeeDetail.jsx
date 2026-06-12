@@ -111,7 +111,15 @@ export default function EmployeeDetail({
         </div>
         <div>
           <span className="detail-meta__label">Phone</span>
-          <span className="detail-meta__value">{employee.phone || '—'}</span>
+          <span className="detail-meta__value">
+            {employee.phone ? (
+              <a className="tel-link" href={`tel:${employee.phone.trim()}`}>
+                📞 {employee.phone}
+              </a>
+            ) : (
+              '—'
+            )}
+          </span>
         </div>
         <div>
           <span className="detail-meta__label">Location</span>

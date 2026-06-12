@@ -34,10 +34,12 @@ export default function CallDialog({ open, candidate, onClose, onLog }) {
     setBusy(false)
   }
 
+  const phone = candidate.phone?.trim()
+
   return (
     <Modal
       open={open}
-      title={`Log call — ${candidate.full_name}`}
+      title={`📞 Call ${candidate.full_name}`}
       onClose={onClose}
       footer={
         <>
@@ -50,7 +52,17 @@ export default function CallDialog({ open, candidate, onClose, onLog }) {
         </>
       }
     >
-      <p className="muted">Outcome of the call (increments call count and logs history).</p>
+      {phone ? (
+        <a className="call-dial" href={`tel:${phone}`}>
+          📞 {phone}
+        </a>
+      ) : (
+        <p className="banner banner--warn">
+          No phone number on file — add it in Employee Master.
+        </p>
+      )}
+
+      <p className="muted section-heading">How did it go?</p>
       <div className="outcome-grid">
         {OUTCOMES.map((o) => (
           <button

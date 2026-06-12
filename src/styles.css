@@ -1305,6 +1305,29 @@ code {
   flex: 1;
 }
 
+/* Tappable phone number at the top of the call dialog. */
+.call-dial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  margin-bottom: 4px;
+  border-radius: 10px;
+  background: rgba(47, 165, 106, 0.14);
+  color: #1c6e45;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.tel-link {
+  color: var(--navy);
+  font-weight: 600;
+  text-decoration: none;
+}
+
 .outcome-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

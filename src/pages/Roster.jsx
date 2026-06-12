@@ -380,8 +380,15 @@ export default function Roster() {
                           )}
                         </div>
                       </div>
-                      {!c.liveConfirmed && (
-                        <div className="roster-card__actions">
+                      <div className="roster-card__actions">
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          onClick={() => setCallFor(c)}
+                        >
+                          Call…
+                        </button>
+                        {!c.liveConfirmed && (
                           <button
                             type="button"
                             className="btn btn--primary btn--sm"
@@ -389,8 +396,8 @@ export default function Roster() {
                           >
                             Confirm
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </li>
                 )

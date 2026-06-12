@@ -22,7 +22,7 @@ export async function listOnBaseEmployees() {
   return supabase
     .from('employees')
     .select(
-      'id,emp_id,full_name,designation_id,employment_status,current_installation_id,' +
+      'id,emp_id,full_name,phone,designation_id,employment_status,current_installation_id,' +
         'designation:designations(id,name)'
     )
     .is('current_installation_id', null)
