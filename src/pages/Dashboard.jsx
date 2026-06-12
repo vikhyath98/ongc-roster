@@ -6,6 +6,14 @@ import { listPenaltyExposure, listReconciledPenalties } from '../lib/penalties'
 import { getAppConfig, configInt } from '../lib/config'
 import { daysInclusive } from '../lib/dates'
 import { rotationState } from '../lib/rotation'
+import Modal from '../components/Modal'
+
+const BAND_LABEL = {
+  in_service: 'In service',
+  eligible: 'Plan Rotation',
+  warning: 'Warning',
+  over: 'Over threshold',
+}
 
 const inr = new Intl.NumberFormat('en-IN', {
   style: 'currency',
@@ -21,6 +29,7 @@ export default function Dashboard() {
   const [thresholds, setThresholds] = useState({ min: 56, warning: 65, max: 70 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [bandModal, setBandModal] = useState(null) // band key or null
 
   useEffect(() => {
     ;(async () => {
@@ -79,16 +88,35 @@ export default function Dashboard() {
   )
 
   const bands = useMemo(() => {
+    let inService = 0
     let eligible = 0
     let warning = 0
     let over = 0
     for (const s of decorated) {
-      if (s.state.key === 'eligible') eligible++
+      if (s.state.key === 'in_service') inService++
+      else if (s.state.key === 'eligible') eligible++
       else if (s.state.key === 'warning') warning++
       else if (s.state.key === 'over') over++
     }
-    return { eligible, warning, over, inWindow: eligible + warning + over }
+    return { inService, eligible, warning, over, inWindow: eligible + warning + over }
   }, [decorated])
+
+  // Breakdown of one band's offshore stints by designation, count desc, with
+  // the distinct installations each designation sits at (no new query).
+  const breakdownFor = (key) => {
+    const byDesig = new Map()
+    for (const s of decorated) {
+      if (s.state.key !== key) continue
+      const desig = s.employee?.designation?.name ?? '—'
+      if (!byDesig.has(desig)) byDesig.set(desig, { designation: desig, count: 0, sites: new Set() })
+      const row = byDesig.get(desig)
+      row.count++
+      if (s.installation?.name) row.sites.add(s.installation.name)
+    }
+    return [...byDesig.values()]
+      .map((r) => ({ designation: r.designation, count: r.count, installations: [...r.sites].sort() }))
+      .sort((a, b) => b.count - a.count || a.designation.localeCompare(b.designation))
+  }
 
   const needsAttention = useMemo(
     () => decorated.filter((s) => s.days >= thresholds.warning),
@@ -130,19 +158,35 @@ export default function Dashboard() {
           <h3>Rotation window</h3>
           <span className="muted">{bands.inWindow} at day {thresholds.min}+</span>
         </div>
-        <div className="band-row">
-          <div className="band band--teal">
+        <div className="band-row band-row--4">
+          <div className="band band--green">
+            <span className="band__num">{bands.inService}</span>
+            <span className="band__label">In service<br />&lt; {thresholds.min}d</span>
+          </div>
+          <button
+            type="button"
+            className="band band--teal band--click"
+            onClick={() => setBandModal('eligible')}
+          >
             <span className="band__num">{bands.eligible}</span>
             <span className="band__label">Plan Rotation<br />{thresholds.min}–{thresholds.warning - 1}d</span>
-          </div>
-          <div className="band band--amber">
+          </button>
+          <button
+            type="button"
+            className="band band--amber band--click"
+            onClick={() => setBandModal('warning')}
+          >
             <span className="band__num">{bands.warning}</span>
             <span className="band__label">Warning<br />{thresholds.warning}–{thresholds.max - 1}d</span>
-          </div>
-          <div className="band band--red">
+          </button>
+          <button
+            type="button"
+            className="band band--red band--click"
+            onClick={() => setBandModal('over')}
+          >
             <span className="band__num">{bands.over}</span>
             <span className="band__label">Over<br />{thresholds.max}d+</span>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -182,6 +226,38 @@ export default function Dashboard() {
           ))}
         </ul>
       )}
+
+      <Modal
+        open={Boolean(bandModal)}
+        title={
+          bandModal
+            ? `${BAND_LABEL[bandModal]} — ${bands[bandModal]} employee${bands[bandModal] === 1 ? '' : 's'}`
+            : ''
+        }
+        onClose={() => setBandModal(null)}
+        footer={
+          <button type="button" className="btn btn--primary" onClick={() => setBandModal(null)}>
+            Close
+          </button>
+        }
+      >
+        {bandModal &&
+          (breakdownFor(bandModal).length === 0 ? (
+            <p className="muted empty-state">Nobody in this band.</p>
+          ) : (
+            <ul className="breakdown-list">
+              {breakdownFor(bandModal).map((r) => (
+                <li key={r.designation} className="breakdown-row">
+                  <div className="breakdown-row__main">
+                    <span className="breakdown-row__desig">{r.designation}</span>
+                    <span className="breakdown-row__sites muted">{r.installations.join(' · ')}</span>
+                  </div>
+                  <span className="breakdown-row__count">{r.count}</span>
+                </li>
+              ))}
+            </ul>
+          ))}
+      </Modal>
     </section>
   )
 }

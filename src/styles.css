@@ -1099,12 +1099,38 @@ code {
   gap: 10px;
 }
 
+.band-row--4 {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
 .band {
   border-radius: 10px;
   padding: 12px 8px;
   text-align: center;
   border: 1px solid var(--border);
   border-top: 4px solid var(--border);
+  background: var(--card);
+  font-family: inherit;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Clickable bands (the three rotation-window states). */
+.band--click {
+  cursor: pointer;
+  transition: box-shadow 0.12s, transform 0.12s;
+}
+
+.band--click:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.band--click:active {
+  transform: translateY(0);
 }
 
 .band__num {
@@ -1120,6 +1146,9 @@ code {
   line-height: 1.2;
 }
 
+.band--green {
+  border-top-color: var(--green);
+}
 .band--teal {
   border-top-color: var(--teal);
 }
@@ -1128,6 +1157,49 @@ code {
 }
 .band--red {
   border-top-color: var(--red);
+}
+
+/* Band breakdown modal */
+.breakdown-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.breakdown-row__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.breakdown-row__desig {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.breakdown-row__sites {
+  font-size: 0.78rem;
+}
+
+.breakdown-row__count {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--navy);
+  flex-shrink: 0;
 }
 
 .penalty-exposure__value {
