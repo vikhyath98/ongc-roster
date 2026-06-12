@@ -7,6 +7,7 @@ import EmployeeForm from '../components/EmployeeForm'
 import EmployeeDetail from '../components/EmployeeDetail'
 import EmployeeImport from '../components/EmployeeImport'
 import BulkVerifyDocuments from '../components/BulkVerifyDocuments'
+import BulkConfirmAvailability from '../components/BulkConfirmAvailability'
 
 export default function Employees() {
   const [employees, setEmployees] = useState([])
@@ -25,7 +26,9 @@ export default function Employees() {
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [bulkOpen, setBulkOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const justVerified = useRef(false)
+  const justConfirmed = useRef(false)
 
   async function load() {
     setLoading(true)
@@ -119,6 +122,13 @@ export default function Employees() {
     setBulkOpen(false)
     if (justVerified.current) {
       justVerified.current = false
+      exitSelection()
+    }
+  }
+  function closeConfirm() {
+    setConfirmOpen(false)
+    if (justConfirmed.current) {
+      justConfirmed.current = false
       exitSelection()
     }
   }
@@ -272,9 +282,14 @@ export default function Employees() {
 
       {selectionMode && selectedIds.size > 0 && (
         <div className="board-actionbar">
-          <button type="button" className="btn btn--primary" onClick={() => setBulkOpen(true)}>
-            Verify Documents ({selectedIds.size})
-          </button>
+          <div className="board-actionbar__row">
+            <button type="button" className="btn btn--ghost" onClick={() => setConfirmOpen(true)}>
+              Confirm Availability ({selectedIds.size})
+            </button>
+            <button type="button" className="btn btn--primary" onClick={() => setBulkOpen(true)}>
+              Verify Documents ({selectedIds.size})
+            </button>
+          </div>
         </div>
       )}
 
@@ -287,6 +302,16 @@ export default function Employees() {
           load()
         }}
         onClose={closeBulk}
+      />
+
+      <BulkConfirmAvailability
+        open={confirmOpen}
+        employees={selectedEmployees}
+        onDone={() => {
+          justConfirmed.current = true
+          load()
+        }}
+        onClose={closeConfirm}
       />
     </section>
   )

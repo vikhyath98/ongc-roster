@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listOffshoreStints } from '../lib/boarding'
-import { loadCandidates, logCall, candidateStatus, splitReplacementGroups } from '../lib/reserve'
+import {
+  loadCandidates,
+  logCall,
+  candidateStatus,
+  splitReplacementGroups,
+  bulkConfirmAvailability,
+} from '../lib/reserve'
 import { daysInclusive, addDays } from '../lib/dates'
 import { rotationState } from '../lib/rotation'
 import { useAuth } from '../context/AuthContext'
@@ -40,6 +46,9 @@ export default function Roster() {
   const [callFor, setCallFor] = useState(null)
   const [flash, setFlash] = useState('')
   const [sheetError, setSheetError] = useState('')
+  // Base-staff tab quick-confirm toast.
+  const [baseFlash, setBaseFlash] = useState('')
+  const [baseError, setBaseError] = useState('')
 
   async function load() {
     setLoading(true)
@@ -177,6 +186,20 @@ export default function Roster() {
     }
   }
 
+  // Quick confirm one base employee (no call flow) with a transient toast.
+  async function quickConfirm(c) {
+    setBaseError('')
+    setBaseFlash('')
+    const { error: err } = await bulkConfirmAvailability([c], { userId: user?.id })
+    if (err) {
+      setBaseError(err.message)
+      return
+    }
+    await load()
+    setBaseFlash(`${c.full_name} confirmed.`)
+    setTimeout(() => setBaseFlash(''), 2500)
+  }
+
   return (
     <section>
       <div className="seg">
@@ -312,6 +335,8 @@ export default function Roster() {
 
       {!loading && !error && tab === 'base' && (
         <>
+          {baseFlash && <p className="banner banner--info">{baseFlash}</p>}
+          {baseError && <p className="banner banner--error">{baseError}</p>}
           {baseStaff.length > 0 && (
             <label className="field roster-filters">
               <span>Designation</span>
@@ -342,40 +367,55 @@ export default function Roster() {
                 const calls = c.availability?.call_count ?? 0
                 return (
                   <li key={c.id}>
-                    <div className={'roster-card' + (status.key === 'eligible' ? ' state--teal' : '')}>
-                      <div className="emp-card__main">
-                        <span className="emp-card__name">{c.full_name}</span>
-                        <span className="emp-card__meta">
-                          {c.emp_id} · {c.designation?.name ?? '—'}
-                        </span>
-                        <span className="reserve-sub">
-                          {c.restDays === null ? 'New — no prior offshore' : `${c.restDays}d rest`}
-                          {` · 📞 ${calls} call${calls === 1 ? '' : 's'}`}
-                          {c.availability?.last_call_outcome
-                            ? ` · ${OUTCOME_LABEL[c.availability.last_call_outcome] ?? c.availability.last_call_outcome}`
-                            : ''}
-                        </span>
-                        {status.blocked && status.reason && (
-                          <span className="reserve-sub reserve-sub--block">{status.reason}</span>
-                        )}
-                      </div>
-                      <div className="emp-card__side">
-                        <span
-                          className={
-                            'pill ' +
-                            (status.key === 'eligible' ? 'pill--ok' : 'pill--bad')
-                          }
-                        >
-                          {status.label}
-                        </span>
-                        {c.liveConfirmed ? (
-                          <span className="pill pill--ok">
-                            Confirmed{exp ? ` · ${exp}` : ''}
+                    <div
+                      className={
+                        'roster-card roster-card--col' +
+                        (status.key === 'eligible' ? ' state--teal' : '')
+                      }
+                    >
+                      <div className="roster-card__row">
+                        <div className="emp-card__main">
+                          <span className="emp-card__name">{c.full_name}</span>
+                          <span className="emp-card__meta">
+                            {c.emp_id} · {c.designation?.name ?? '—'}
                           </span>
-                        ) : (
-                          <span className="pill pill--muted">Unconfirmed</span>
-                        )}
+                          <span className="reserve-sub">
+                            {c.restDays === null ? 'New — no prior offshore' : `${c.restDays}d rest`}
+                            {` · 📞 ${calls} call${calls === 1 ? '' : 's'}`}
+                            {c.availability?.last_call_outcome
+                              ? ` · ${OUTCOME_LABEL[c.availability.last_call_outcome] ?? c.availability.last_call_outcome}`
+                              : ''}
+                          </span>
+                          {status.blocked && status.reason && (
+                            <span className="reserve-sub reserve-sub--block">{status.reason}</span>
+                          )}
+                        </div>
+                        <div className="emp-card__side">
+                          <span
+                            className={
+                              'pill ' + (status.key === 'eligible' ? 'pill--ok' : 'pill--bad')
+                            }
+                          >
+                            {status.label}
+                          </span>
+                          {c.liveConfirmed ? (
+                            <span className="pill pill--ok">Confirmed{exp ? ` · ${exp}` : ''}</span>
+                          ) : (
+                            <span className="pill pill--muted">Unconfirmed</span>
+                          )}
+                        </div>
                       </div>
+                      {!c.liveConfirmed && (
+                        <div className="roster-card__actions">
+                          <button
+                            type="button"
+                            className="btn btn--primary btn--sm"
+                            onClick={() => quickConfirm(c)}
+                          >
+                            Confirm
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </li>
                 )

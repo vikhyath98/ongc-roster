@@ -259,3 +259,32 @@ export async function logCall(
     .upsert(row, { onConflict: 'employee_id' })
   return { error: upErr }
 }
+
+// Confirm availability for many employees at once without going through the
+// call flow (e.g. just-imported batch). Skips anyone currently offshore (they
+// don't need confirmation). Does NOT touch call_count — it isn't a call.
+// Returns { confirmed, skipped, error }.
+export async function bulkConfirmAvailability(employees, { confirmedForDate, userId } = {}) {
+  const onBase = (employees ?? []).filter((e) => !e.current_installation_id)
+  const skipped = (employees ?? []).length - onBase.length
+  if (onBase.length === 0) return { confirmed: 0, skipped, error: null }
+
+  const { config } = await getAppConfig()
+  const validityDays = configInt(config, 'confirmation_validity_days', 14)
+  const nowISO = new Date().toISOString()
+  const expiresISO = new Date(Date.now() + validityDays * 86400000).toISOString()
+
+  const rows = onBase.map((e) => ({
+    employee_id: e.id,
+    confirmed: true,
+    confirmed_at: nowISO,
+    expires_at: expiresISO,
+    confirmed_for_date: confirmedForDate || null,
+    last_call_outcome: 'confirmed',
+    updated_by: userId ?? null,
+  }))
+
+  const { error } = await supabase.from('availability').upsert(rows, { onConflict: 'employee_id' })
+  if (error) return { confirmed: 0, skipped, error }
+  return { confirmed: onBase.length, skipped, error: null }
+}
