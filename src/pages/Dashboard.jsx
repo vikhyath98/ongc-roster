@@ -5,6 +5,8 @@ import { listOffshoreStints } from '../lib/boarding'
 import { listPenaltyExposure, listReconciledPenalties } from '../lib/penalties'
 import { getAppConfig, configInt } from '../lib/config'
 import { loadCandidates } from '../lib/reserve'
+import { listInstallationRequirements } from '../lib/configAdmin'
+import { listInstallations, listDesignations } from '../lib/reference'
 import { daysInclusive } from '../lib/dates'
 import { rotationState } from '../lib/rotation'
 import Modal from '../components/Modal'
@@ -15,6 +17,9 @@ const BAND_LABEL = {
   warning: 'Warning',
   over: 'Over threshold',
 }
+
+// Pluralise a designation name for the variance lines ("1 Cook" / "2 Cooks").
+const plural = (name, n) => `${name}${n > 1 ? 's' : ''}`
 
 const inr = new Intl.NumberFormat('en-IN', {
   style: 'currency',
@@ -28,6 +33,9 @@ export default function Dashboard() {
   const [candidates, setCandidates] = useState([])
   const [exposure, setExposure] = useState([])
   const [reconciled, setReconciled] = useState([])
+  const [requirements, setRequirements] = useState([])
+  const [installations, setInstallations] = useState([])
+  const [designations, setDesignations] = useState([])
   const [thresholds, setThresholds] = useState({ min: 56, warning: 65, max: 70 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -37,14 +45,18 @@ export default function Dashboard() {
     ;(async () => {
       setLoading(true)
       // Reuse the same queries the other modules use; run them in parallel.
-      const [empRes, stintRes, expRes, recRes, cfgRes, candRes] = await Promise.all([
-        listEmployees(),
-        listOffshoreStints(),
-        listPenaltyExposure(),
-        listReconciledPenalties(),
-        getAppConfig(),
-        loadCandidates(),
-      ])
+      const [empRes, stintRes, expRes, recRes, cfgRes, candRes, reqRes, instRes, desRes] =
+        await Promise.all([
+          listEmployees(),
+          listOffshoreStints(),
+          listPenaltyExposure(),
+          listReconciledPenalties(),
+          getAppConfig(),
+          loadCandidates(),
+          listInstallationRequirements(),
+          listInstallations({ activeOnly: true }),
+          listDesignations(),
+        ])
       const err =
         empRes.error || stintRes.error || expRes.error || recRes.error || cfgRes.error || candRes.error
       if (err) {
@@ -57,6 +69,9 @@ export default function Dashboard() {
       setCandidates(candRes.candidates ?? [])
       setExposure(expRes.data ?? [])
       setReconciled(recRes.data ?? [])
+      if (!reqRes.error) setRequirements(reqRes.data ?? [])
+      if (!instRes.error) setInstallations(instRes.data ?? [])
+      if (!desRes.error) setDesignations(desRes.data ?? [])
       setThresholds({
         min: configInt(cfgRes.config, 'min_service_days', 56),
         warning: configInt(cfgRes.config, 'warning_day', 65),
@@ -153,6 +168,50 @@ export default function Dashboard() {
     return { cls: 'bad', text: 'Replacement pipeline is thin — prioritise confirming base staff' }
   }, [reserve.ready, bands.inWindow])
 
+  // Staffing variance: required vs currently-offshore per designation, per
+  // active installation that has requirements configured (client-side join).
+  const variance = useMemo(() => {
+    const desigName = new Map(designations.map((d) => [d.id, d.name]))
+    const installById = new Map(installations.map((i) => [i.id, i]))
+
+    // Requirements only for active installations.
+    const reqByInstall = new Map()
+    for (const r of requirements) {
+      if (!installById.has(r.installation_id)) continue
+      if (!reqByInstall.has(r.installation_id)) reqByInstall.set(r.installation_id, [])
+      reqByInstall.get(r.installation_id).push(r)
+    }
+
+    // Current offshore headcount keyed by installation+designation.
+    const offCount = new Map()
+    for (const s of stints) {
+      const inst = s.installation_id ?? s.installation?.id
+      const des = s.employee?.designation?.id
+      if (!inst || !des) continue
+      const key = inst + '|' + des
+      offCount.set(key, (offCount.get(key) ?? 0) + 1)
+    }
+
+    const rows = []
+    for (const [instId, reqs] of reqByInstall) {
+      const shortages = []
+      const surpluses = []
+      for (const r of reqs) {
+        const cur = offCount.get(instId + '|' + r.designation_id) ?? 0
+        const v = (r.required_count ?? 0) - cur
+        const name = desigName.get(r.designation_id) ?? '—'
+        if (v > 0) shortages.push({ name, n: v })
+        else if (v < 0) surpluses.push({ name, n: -v })
+      }
+      if (shortages.length === 0 && surpluses.length === 0) continue
+      shortages.sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
+      surpluses.sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
+      rows.push({ installation: installById.get(instId)?.name ?? '—', shortages, surpluses })
+    }
+    rows.sort((a, b) => a.installation.localeCompare(b.installation))
+    return { rows, anyConfigured: reqByInstall.size > 0 }
+  }, [requirements, installations, designations, stints])
+
   // Open exposure = unreconciled penalty rows (same rule as the Penalty tracker).
   const openExposure = useMemo(() => {
     const reconciledStintIds = new Set(reconciled.map((r) => r.rotation_log_id))
@@ -244,6 +303,36 @@ export default function Dashboard() {
         <span className="penalty-exposure__value">{inr.format(openExposure)}</span>
         <span className="muted">unreconciled · tap to review</span>
       </Link>
+
+      {/* Staffing variance */}
+      <div className="dash-card">
+        <div className="dash-card__head">
+          <h3>Staffing variance</h3>
+        </div>
+        {!variance.anyConfigured ? (
+          <p className="muted">Set up staffing requirements in Configuration to see variance.</p>
+        ) : variance.rows.length === 0 ? (
+          <p className="readiness-health readiness-health--ok">All installations fully staffed</p>
+        ) : (
+          <div className="variance-list">
+            {variance.rows.map((r) => (
+              <div className="variance-install" key={r.installation}>
+                <h4 className="variance-install__name">{r.installation}</h4>
+                {r.shortages.map((s, i) => (
+                  <p key={`s${i}`} className="variance-row variance-row--short">
+                    ● Short {s.n} {plural(s.name, s.n)}
+                  </p>
+                ))}
+                {r.surpluses.map((s, i) => (
+                  <p key={`u${i}`} className="variance-row variance-row--surplus">
+                    ● Surplus {s.n} {plural(s.name, s.n)}
+                  </p>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Needs attention */}
       <div className="dash-card__head dash-attention-head">

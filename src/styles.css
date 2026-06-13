@@ -1262,6 +1262,32 @@ code {
   color: #a4231a;
 }
 
+/* Staffing variance */
+.variance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.variance-install__name {
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.variance-row {
+  margin: 2px 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.variance-row--short {
+  color: var(--red);
+}
+
+.variance-row--surplus {
+  color: #8a6300;
+}
+
 .dash-attention-head {
   margin: 4px 0 -4px;
 }
