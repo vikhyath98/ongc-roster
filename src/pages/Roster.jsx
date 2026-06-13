@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { listOffshoreStints } from '../lib/boarding'
 import {
   loadCandidates,
@@ -27,7 +28,9 @@ const OUTCOME_LABEL = {
 //               confirmation at a glance.
 export default function Roster() {
   const { user } = useAuth()
-  const [tab, setTab] = useState('offshore')
+  const [searchParams] = useSearchParams()
+  // Deep-link support from the Dashboard reserve-readiness tiles.
+  const [tab, setTab] = useState(searchParams.get('tab') === 'base' ? 'base' : 'offshore')
   const [stints, setStints] = useState([])
   const [candidates, setCandidates] = useState([])
   const [thresholds, setThresholds] = useState({ min: 56, warning: 65, max: 70 })
@@ -38,8 +41,13 @@ export default function Roster() {
   // Offshore-tab filters.
   const [fInstall, setFInstall] = useState('')
   const [fDesig, setFDesig] = useState('')
-  // Base-tab filter.
+  // Base-tab filters (designation + confirmation, the latter deep-linkable).
   const [fBaseDesig, setFBaseDesig] = useState('')
+  const [fBaseConfirm, setFBaseConfirm] = useState(
+    ['confirmed', 'unconfirmed'].includes(searchParams.get('confirm'))
+      ? searchParams.get('confirm')
+      : 'all'
+  )
 
   // Replacement sheet + call dialog.
   const [replaceForId, setReplaceForId] = useState(null)
@@ -111,10 +119,13 @@ export default function Roster() {
     for (const c of baseStaff) if (c.designation) m.set(c.designation.id, c.designation)
     return [...m.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [baseStaff])
-  const baseShown = useMemo(
-    () => (fBaseDesig ? baseStaff.filter((c) => c.designation_id === fBaseDesig) : baseStaff),
-    [baseStaff, fBaseDesig]
-  )
+  const baseShown = useMemo(() => {
+    let list = fBaseDesig ? baseStaff.filter((c) => c.designation_id === fBaseDesig) : baseStaff
+    if (fBaseConfirm === 'confirmed') list = list.filter((c) => c.liveConfirmed)
+    else if (fBaseConfirm === 'unconfirmed') list = list.filter((c) => !c.liveConfirmed)
+    return list
+  }, [baseStaff, fBaseDesig, fBaseConfirm])
+  const baseFiltered = Boolean(fBaseDesig) || fBaseConfirm !== 'all'
 
   // ----- Replacement sheet -----
   const target = useMemo(
@@ -313,27 +324,37 @@ export default function Roster() {
           {baseFlash && <p className="banner banner--info">{baseFlash}</p>}
           {baseError && <p className="banner banner--error">{baseError}</p>}
           {baseStaff.length > 0 && (
-            <label className="field roster-filters">
-              <span>Designation</span>
-              <select value={fBaseDesig} onChange={(e) => setFBaseDesig(e.target.value)}>
-                <option value="">All designations</option>
-                {baseDesigOptions.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="board-controls roster-filters">
+              <label className="field">
+                <span>Designation</span>
+                <select value={fBaseDesig} onChange={(e) => setFBaseDesig(e.target.value)}>
+                  <option value="">All designations</option>
+                  {baseDesigOptions.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Confirmation</span>
+                <select value={fBaseConfirm} onChange={(e) => setFBaseConfirm(e.target.value)}>
+                  <option value="all">All</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="unconfirmed">Unconfirmed</option>
+                </select>
+              </label>
+            </div>
           )}
 
           <p className="list-count muted">
-            {fBaseDesig ? `${baseShown.length} of ${baseStaff.length}` : baseStaff.length} on base
+            {baseFiltered ? `${baseShown.length} of ${baseStaff.length}` : baseStaff.length} on base
           </p>
 
           {baseStaff.length === 0 ? (
             <p className="muted empty-state">Everyone active is currently offshore.</p>
           ) : baseShown.length === 0 ? (
-            <p className="muted empty-state">No base staff for this designation.</p>
+            <p className="muted empty-state">No base staff match these filters.</p>
           ) : (
             <ul className="card-list">
               {baseShown.map((c) => {

@@ -1209,6 +1209,59 @@ code {
   line-height: 1.1;
 }
 
+/* Reserve readiness */
+.readiness-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.readiness-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--card);
+}
+
+.readiness-cell:active {
+  background: rgba(94, 197, 232, 0.08);
+}
+
+.readiness-num {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--navy);
+  line-height: 1;
+}
+
+.readiness-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.readiness-health {
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.readiness-health--ok {
+  color: #1c6e45;
+}
+.readiness-health--warn {
+  color: #8a6300;
+}
+.readiness-health--bad {
+  color: #a4231a;
+}
+
 .dash-attention-head {
   margin: 4px 0 -4px;
 }

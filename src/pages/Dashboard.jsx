@@ -4,6 +4,7 @@ import { listEmployees } from '../lib/employees'
 import { listOffshoreStints } from '../lib/boarding'
 import { listPenaltyExposure, listReconciledPenalties } from '../lib/penalties'
 import { getAppConfig, configInt } from '../lib/config'
+import { loadCandidates } from '../lib/reserve'
 import { daysInclusive } from '../lib/dates'
 import { rotationState } from '../lib/rotation'
 import Modal from '../components/Modal'
@@ -24,6 +25,7 @@ const inr = new Intl.NumberFormat('en-IN', {
 export default function Dashboard() {
   const [employees, setEmployees] = useState([])
   const [stints, setStints] = useState([])
+  const [candidates, setCandidates] = useState([])
   const [exposure, setExposure] = useState([])
   const [reconciled, setReconciled] = useState([])
   const [thresholds, setThresholds] = useState({ min: 56, warning: 65, max: 70 })
@@ -35,15 +37,16 @@ export default function Dashboard() {
     ;(async () => {
       setLoading(true)
       // Reuse the same queries the other modules use; run them in parallel.
-      const [empRes, stintRes, expRes, recRes, cfgRes] = await Promise.all([
+      const [empRes, stintRes, expRes, recRes, cfgRes, candRes] = await Promise.all([
         listEmployees(),
         listOffshoreStints(),
         listPenaltyExposure(),
         listReconciledPenalties(),
         getAppConfig(),
+        loadCandidates(),
       ])
       const err =
-        empRes.error || stintRes.error || expRes.error || recRes.error || cfgRes.error
+        empRes.error || stintRes.error || expRes.error || recRes.error || cfgRes.error || candRes.error
       if (err) {
         setError(err.message)
         setLoading(false)
@@ -51,6 +54,7 @@ export default function Dashboard() {
       }
       setEmployees(empRes.data ?? [])
       setStints(stintRes.data ?? [])
+      setCandidates(candRes.candidates ?? [])
       setExposure(expRes.data ?? [])
       setReconciled(recRes.data ?? [])
       setThresholds({
@@ -123,6 +127,32 @@ export default function Dashboard() {
     [decorated, thresholds]
   )
 
+  // Reserve readiness from the same candidates loadCandidates() builds.
+  // Confirmed ready = the strict reserve pool (§3.4); eligible-unconfirmed =
+  // deployable but not yet confirmed (or confirmation expired).
+  const reserve = useMemo(() => {
+    const active = candidates.filter((c) => c.employment_status === 'active')
+    const deployable = active.filter((c) => c.eligible && c.cert.certCurrent)
+    const ready = deployable.filter((c) => c.liveConfirmed).length
+    const eligibleUnconfirmed = deployable.length - ready
+    return { ready, eligibleUnconfirmed }
+  }, [candidates])
+
+  // Pipeline health: confirmed-ready vs everyone in the rotation window.
+  const health = useMemo(() => {
+    const windowCount = bands.inWindow
+    if (windowCount === 0 || reserve.ready >= windowCount) {
+      return { cls: 'ok', text: 'Replacement pipeline looks healthy' }
+    }
+    if (reserve.ready >= windowCount * 0.5) {
+      return {
+        cls: 'warn',
+        text: 'Fewer confirmed replacements than employees in rotation window — call to confirm',
+      }
+    }
+    return { cls: 'bad', text: 'Replacement pipeline is thin — prioritise confirming base staff' }
+  }, [reserve.ready, bands.inWindow])
+
   // Open exposure = unreconciled penalty rows (same rule as the Penalty tracker).
   const openExposure = useMemo(() => {
     const reconciledStintIds = new Set(reconciled.map((r) => r.rotation_log_id))
@@ -188,6 +218,24 @@ export default function Dashboard() {
             <span className="band__label">Over<br />{thresholds.max}d+</span>
           </button>
         </div>
+      </div>
+
+      {/* Reserve readiness */}
+      <div className="dash-card">
+        <div className="dash-card__head">
+          <h3>Reserve readiness</h3>
+        </div>
+        <div className="readiness-row">
+          <Link to="/roster?tab=base&confirm=confirmed" className="readiness-cell">
+            <span className="readiness-num">{reserve.ready}</span>
+            <span className="readiness-label">Confirmed ready</span>
+          </Link>
+          <Link to="/roster?tab=base&confirm=unconfirmed" className="readiness-cell">
+            <span className="readiness-num">{reserve.eligibleUnconfirmed}</span>
+            <span className="readiness-label">Eligible (unconfirmed)</span>
+          </Link>
+        </div>
+        <p className={`readiness-health readiness-health--${health.cls}`}>{health.text}</p>
       </div>
 
       {/* Penalty exposure */}
