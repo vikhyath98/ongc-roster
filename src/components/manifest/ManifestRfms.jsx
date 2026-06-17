@@ -9,9 +9,21 @@ import {
 } from '../../lib/manifest'
 import { listInstallations } from '../../lib/reference'
 import { listEmployees } from '../../lib/employees'
+import {
+  listDocumentTypes,
+  listAllEmployeeDocuments,
+  computeCertStatus,
+} from '../../lib/documents'
 import { getAppConfig, configInt } from '../../lib/config'
 import { todayISO } from '../../lib/dates'
 import Modal from '../Modal'
+
+// First failing required document, "Name reason" (e.g. "Medical Fitness
+// Certificate expired"), matching the old Onboard cert gate (§6.4).
+function blockingDoc(cert) {
+  const p = cert.problems?.[0]
+  return p ? `${p.name} ${p.reason}` : 'cert not current'
+}
 
 const MODES = ['Air', 'Sea', 'Other']
 const OUTCOME_PILL = {
@@ -342,6 +354,8 @@ function LogRfmModal({ open, installations, requests, employees, onClose, onCrea
 
 function RfmDetailModal({ rfmId, userId, cfg, onClose, onChanged }) {
   const [rfm, setRfm] = useState(null)
+  const [docTypes, setDocTypes] = useState([])
+  const [docsByEmp, setDocsByEmp] = useState(new Map())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [reasons, setReasons] = useState({}) // lineId -> reason text
@@ -351,11 +365,28 @@ function RfmDetailModal({ rfmId, userId, cfg, onClose, onChanged }) {
     if (!rfmId) return
     setLoading(true)
     setError('')
-    const { data, error: err } = await getRfm(rfmId)
-    if (err) setError(err.message)
-    else setRfm(data)
+    const [rfmRes, dtRes, docsRes] = await Promise.all([
+      getRfm(rfmId),
+      listDocumentTypes(),
+      listAllEmployeeDocuments(),
+    ])
+    if (rfmRes.error) setError(rfmRes.error.message)
+    else setRfm(rfmRes.data)
+    if (!dtRes.error) setDocTypes(dtRes.data ?? [])
+    if (!docsRes.error) {
+      const m = new Map()
+      for (const d of docsRes.data ?? []) {
+        if (!m.has(d.employee_id)) m.set(d.employee_id, [])
+        m.get(d.employee_id).push(d)
+      }
+      setDocsByEmp(m)
+    }
     setLoading(false)
   }
+
+  // Cert-current check for an RFM line's employee (§6.4) — gates Boarded.
+  const certFor = (line) =>
+    computeCertStatus(line.employee?.designation?.id, docTypes, docsByEmp.get(line.employee_id) ?? [])
 
   useEffect(() => {
     if (rfmId) {
@@ -368,6 +399,14 @@ function RfmDetailModal({ rfmId, userId, cfg, onClose, onChanged }) {
   }, [rfmId])
 
   async function record(line, outcome) {
+    // Cert gate (§6.4): never board someone whose required docs aren't current.
+    if (outcome === 'boarded') {
+      const cert = certFor(line)
+      if (!cert.certCurrent) {
+        setError(`Cannot board ${line.employee?.full_name} — ${blockingDoc(cert)}.`)
+        return
+      }
+    }
     setBusyLine(line.id)
     setError('')
     const { error: err } = await recordRfmOutcome(line, outcome, {
@@ -411,6 +450,8 @@ function RfmDetailModal({ rfmId, userId, cfg, onClose, onChanged }) {
             {(rfm.line_items ?? []).map((line) => {
               const op = OUTCOME_PILL[line.outcome] ?? OUTCOME_PILL.listed
               const settled = line.outcome !== 'listed'
+              const cert = certFor(line)
+              const certBlocked = !cert.certCurrent
               return (
                 <li key={line.id}>
                   <div className="roster-card roster-card--col">
@@ -430,6 +471,11 @@ function RfmDetailModal({ rfmId, userId, cfg, onClose, onChanged }) {
 
                     {!settled && (
                       <>
+                        {certBlocked && (
+                          <span className="cert-block" style={{ marginTop: 8 }}>
+                            ⛔ {blockingDoc(cert)} — cannot board
+                          </span>
+                        )}
                         <input
                           className="search"
                           style={{ marginTop: 8 }}
@@ -443,7 +489,7 @@ function RfmDetailModal({ rfmId, userId, cfg, onClose, onChanged }) {
                           <button
                             type="button"
                             className="btn btn--primary btn--sm"
-                            disabled={busyLine === line.id}
+                            disabled={busyLine === line.id || certBlocked}
                             onClick={() => record(line, 'boarded')}
                           >
                             Boarded
