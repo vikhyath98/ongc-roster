@@ -1605,6 +1605,14 @@ code {
   flex: 1;
 }
 
+/* Secondary manual-onboard escape hatch */
+.manifest-manual {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+  text-align: center;
+}
+
 /* ---------- Boarding ---------- */
 .board-controls {
   display: grid;

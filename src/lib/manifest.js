@@ -209,6 +209,51 @@ export async function createRfm(
   return { error: null, id: rfm.id }
 }
 
+// Manual onboard (exception) — board someone outside the formal manifest/RFM
+// flow. Onboards as normal, flags the rotation_log row as a manual exception
+// with its reason, and (optionally) opens a 'boarded' pairing for the relieved
+// employee. Returns { error }.
+export async function manualOnboard({
+  employeeId,
+  installationId,
+  signOnDate,
+  reason,
+  relievingEmployeeId,
+  userId,
+  maxServiceDays = 70,
+  reliefGraceDays = 1,
+}) {
+  const { data: log, error: onErr } = await onboardEmployee(
+    employeeId,
+    {
+      installationId,
+      signOnDate,
+      expectedRotationDate: addDays(signOnDate, maxServiceDays),
+    },
+    userId
+  )
+  if (onErr) return { error: onErr }
+
+  const { error: flagErr } = await supabase
+    .from('rotation_log')
+    .update({ is_manual_exception: true, manual_exception_reason: reason?.trim() || null })
+    .eq('id', log.id)
+  if (flagErr) return { error: flagErr }
+
+  if (relievingEmployeeId) {
+    const { error: pErr } = await supabase.from('replacement_pairings').insert({
+      manifest_request_item_id: null,
+      outgoing_employee_id: relievingEmployeeId,
+      incoming_employee_id: employeeId,
+      status: 'boarded',
+      relief_deadline: addDays(signOnDate, reliefGraceDays),
+    })
+    if (pErr) return { error: pErr }
+  }
+
+  return { error: null }
+}
+
 // The pairing currently tied to a given RFM line item, if any.
 async function pairingForLine(lineItemId) {
   const { data } = await supabase
