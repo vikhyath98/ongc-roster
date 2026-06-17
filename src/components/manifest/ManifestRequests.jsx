@@ -210,10 +210,49 @@ function NewRequestModal({
     [offshore, installationId]
   )
 
-  const replacingStint = offshoreHere.find((s) => s.id === replacingId) ?? null
+  // replacingId holds the OUTGOING EMPLOYEE id (not the stint id) — match by it.
+  const replacingStint = offshoreHere.find((s) => s.employee?.id === replacingId) ?? null
   const replacingDays = replacingStint ? daysInclusive(replacingStint.sign_on_date) : null
   const under56 = replacingDays != null && replacingDays < thresholds.min
   const warn65 = replacingDays != null && replacingDays >= thresholds.warning
+
+  // Category per designation, to enforce like-for-like replacement.
+  const catByDesig = useMemo(
+    () => new Map(designations.map((d) => [d.id, d.category?.name])),
+    [designations]
+  )
+
+  // Employees already used (incoming or outgoing) in staged items, to drop
+  // them from both pickers for subsequent line items.
+  const usedIds = useMemo(() => {
+    const s = new Set()
+    for (const it of items) {
+      s.add(it.employeeId)
+      if (it.replacingEmployeeId) s.add(it.replacingEmployeeId)
+    }
+    return s
+  }, [items])
+
+  const incoming = candidates.find((c) => c.id === incomingId) ?? null
+  const incomingDesig = incoming?.designation
+  const outgoingDesig = replacingStint?.employee?.designation
+
+  // Designation matching: exact match passes silently; a different designation
+  // in the SAME Unskilled category warns (non-blocking); anything else is a
+  // hard block (Skilled / Semi-skilled / Outsourced must match exactly).
+  let desigBlock = null
+  let desigWarn = null
+  if (incoming && replacingStint && incomingDesig?.id && outgoingDesig?.id) {
+    if (incomingDesig.id !== outgoingDesig.id) {
+      const inCat = catByDesig.get(incomingDesig.id)
+      const outCat = catByDesig.get(outgoingDesig.id)
+      if (inCat && inCat === outCat && outCat === 'Unskilled') {
+        desigWarn = `⚠️ ${incomingDesig.name} is replacing ${outgoingDesig.name} — different roles, please confirm this is intended.`
+      } else {
+        desigBlock = `${outgoingDesig.name} can only be replaced by another ${outgoingDesig.name}.`
+      }
+    }
+  }
 
   // Name lookups for the staged-items display.
   const nameById = useMemo(() => {
@@ -225,6 +264,7 @@ function NewRequestModal({
 
   const canAddItem =
     Boolean(incomingId) &&
+    !desigBlock &&
     (!replacingId || !under56 || (emergencyOn && exceptionReason.trim().length > 0))
 
   function addItem() {
@@ -350,11 +390,13 @@ function NewRequestModal({
             <span>Incoming / relief employee * (confirmed only)</span>
             <select value={incomingId} onChange={(e) => setIncomingId(e.target.value)}>
               <option value="">Select…</option>
-              {confirmedCandidates.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name} — {c.designation?.name ?? '—'}
-                </option>
-              ))}
+              {confirmedCandidates
+                .filter((c) => !usedIds.has(c.id))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.full_name} — {c.designation?.name ?? '—'}
+                  </option>
+                ))}
             </select>
           </label>
 
@@ -369,14 +411,19 @@ function NewRequestModal({
               }}
             >
               <option value="">— not a direct replacement —</option>
-              {offshoreHere.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.employee?.full_name} — {s.employee?.designation?.name ?? '—'} (
-                  {daysInclusive(s.sign_on_date)}d)
-                </option>
-              ))}
+              {offshoreHere
+                .filter((s) => !usedIds.has(s.employee?.id))
+                .map((s) => (
+                  <option key={s.id} value={s.employee?.id}>
+                    {s.employee?.full_name} — {s.employee?.designation?.name ?? '—'} (
+                    {daysInclusive(s.sign_on_date)}d)
+                  </option>
+                ))}
             </select>
           </label>
+
+          {desigBlock && <p className="banner banner--error">{desigBlock}</p>}
+          {desigWarn && <p className="banner banner--warn">{desigWarn}</p>}
 
           {!replacingId && (
             <label className="field">
