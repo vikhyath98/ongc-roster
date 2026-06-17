@@ -1,30 +1,32 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listOffshoreStints, batchOnboard, batchOffboard } from '../lib/boarding'
-import { loadCandidates } from '../lib/reserve'
-import { listInstallations } from '../lib/reference'
+import { listOffshoreStints, batchOffboard } from '../lib/boarding'
 import {
   listDocumentTypes,
   listAllEmployeeDocuments,
   computeCertStatus,
 } from '../lib/documents'
 import { useAuth } from '../context/AuthContext'
-import { todayISO, addDays, daysInclusive } from '../lib/dates'
+import { todayISO, daysInclusive } from '../lib/dates'
 import SelectableEmployeeList from '../components/SelectableEmployeeList'
-import Modal from '../components/Modal'
+import ManifestTab from '../components/manifest/ManifestTab'
 
+// The Board screen. Onboarding now flows through the formal Manifest → RFM
+// pipeline (Manifest tab); Offboard closes stints. The old ad-hoc batch
+// Onboard tab is gone — its only escape hatch is the Manual onboard
+// (exception) link inside the Manifest tab.
 export default function Boarding() {
   const { user } = useAuth()
-  const [tab, setTab] = useState('onboard')
+  const [tab, setTab] = useState('manifest')
 
   return (
     <section>
       <div className="seg">
         <button
           type="button"
-          className={'seg__btn' + (tab === 'onboard' ? ' seg__btn--on' : '')}
-          onClick={() => setTab('onboard')}
+          className={'seg__btn' + (tab === 'manifest' ? ' seg__btn--on' : '')}
+          onClick={() => setTab('manifest')}
         >
-          🚁 Onboard
+          📋 Manifest
         </button>
         <button
           type="button"
@@ -35,185 +37,8 @@ export default function Boarding() {
         </button>
       </div>
 
-      {tab === 'onboard' ? <OnboardTab userId={user?.id} /> : <OffboardTab userId={user?.id} />}
+      {tab === 'manifest' ? <ManifestTab userId={user?.id} /> : <OffboardTab userId={user?.id} />}
     </section>
-  )
-}
-
-// First failing required document, formatted "Name reason" (e.g. "Medical
-// Fitness Certificate expired") for the inline cert-block message.
-function blockingDoc(cert) {
-  const p = cert.problems?.[0]
-  return p ? `${p.name} ${p.reason}` : 'cert not current'
-}
-
-function OnboardTab({ userId }) {
-  const [base, setBase] = useState([])
-  const [installations, setInstallations] = useState([])
-  const [maxServiceDays, setMaxServiceDays] = useState(70)
-  const [installationId, setInstallationId] = useState('')
-  const [signOnDate, setSignOnDate] = useState(todayISO())
-  const [selected, setSelected] = useState(new Set())
-  const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [done, setDone] = useState('')
-  const [confirmOpen, setConfirmOpen] = useState(false)
-
-  async function load() {
-    setLoading(true)
-    const [candRes, instRes] = await Promise.all([
-      loadCandidates(),
-      listInstallations({ activeOnly: true }),
-    ])
-    if (candRes.error) setError(candRes.error.message)
-    else setBase((candRes.candidates ?? []).filter((c) => c.employment_status === 'active'))
-    if (!instRes.error) setInstallations(instRes.data ?? [])
-    if (candRes.thresholds) setMaxServiceDays(candRes.thresholds.max)
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    load()
-  }, [])
-
-  function toggle(id) {
-    setSelected((s) => {
-      const next = new Set(s)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-    setDone('')
-  }
-  const selectAll = (ids) => setSelected(new Set(ids))
-  const clear = () => setSelected(new Set())
-
-  const installation = installations.find((i) => i.id === installationId)
-  const expected = signOnDate ? addDays(signOnDate, maxServiceDays) : ''
-  const canSubmit = installationId && signOnDate && selected.size > 0 && !busy
-
-  // Cert gate (hard) + confirmation warning (soft) per candidate.
-  const isCertBlocked = (c) => !c.cert.certCurrent
-
-  const selectedNotConfirmed = useMemo(
-    () => base.filter((c) => selected.has(c.id) && !c.liveConfirmed),
-    [base, selected]
-  )
-
-  function attemptSubmit() {
-    if (!canSubmit) return
-    if (selectedNotConfirmed.length > 0) {
-      setConfirmOpen(true)
-      return
-    }
-    submit()
-  }
-
-  async function submit() {
-    setConfirmOpen(false)
-    setBusy(true)
-    setError('')
-    setDone('')
-    const { error: err, count } = await batchOnboard(
-      [...selected],
-      { installationId, signOnDate, maxServiceDays },
-      userId
-    )
-    setBusy(false)
-    if (err) {
-      setError(err.message)
-      return
-    }
-    setDone(`Onboarded ${count} to ${installation?.name} (sign-on ${signOnDate}).`)
-    setSelected(new Set())
-    load()
-  }
-
-  if (loading) return <p className="muted">Loading…</p>
-
-  return (
-    <div className="board-tab">
-      <div className="board-controls">
-        <label className="field">
-          <span>Installation *</span>
-          <select value={installationId} onChange={(e) => setInstallationId(e.target.value)}>
-            <option value="">Select…</option>
-            {installations.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.name} ({i.type})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Sign-on date *</span>
-          <input type="date" value={signOnDate} onChange={(e) => setSignOnDate(e.target.value)} />
-        </label>
-      </div>
-      <p className="field-hint muted">
-        Expected rotation: <strong>{expected || '—'}</strong> (sign-on + {maxServiceDays} days).
-      </p>
-
-      {error && <p className="banner banner--error">{error}</p>}
-      {done && <p className="banner banner--info">{done}</p>}
-
-      <h3 className="section-heading">Select base staff to onboard</h3>
-      <p className="field-hint muted">
-        Staff without current certificates are greyed out and cannot be boarded.
-      </p>
-      <SelectableEmployeeList
-        items={base}
-        selected={selected}
-        onToggle={toggle}
-        onSelectAll={selectAll}
-        onClear={clear}
-        isDisabled={isCertBlocked}
-        searchText={(e) => `${e.full_name} ${e.emp_id} ${e.designation?.name ?? ''}`}
-        renderPrimary={(e) => e.full_name}
-        renderMeta={(e) => `${e.emp_id} · ${e.designation?.name ?? 'No designation'}`}
-        renderExtra={(e) =>
-          isCertBlocked(e) ? (
-            <span className="cert-block">⛔ {blockingDoc(e.cert)}</span>
-          ) : !e.liveConfirmed ? (
-            <span className="pill pill--warn">Not confirmed</span>
-          ) : null
-        }
-        emptyText="No base staff available to onboard."
-      />
-
-      <div className="board-actionbar">
-        <button type="button" className="btn btn--primary" disabled={!canSubmit} onClick={attemptSubmit}>
-          {busy
-            ? 'Onboarding…'
-            : `Onboard ${selected.size || ''}${installation ? ` → ${installation.name}` : ''}`.trim()}
-        </button>
-      </div>
-
-      <Modal
-        open={confirmOpen}
-        title="Board unconfirmed staff?"
-        onClose={() => setConfirmOpen(false)}
-        footer={
-          <>
-            <button type="button" className="btn btn--ghost" onClick={() => setConfirmOpen(false)}>
-              Cancel
-            </button>
-            <button type="button" className="btn btn--primary" onClick={submit}>
-              Board anyway
-            </button>
-          </>
-        }
-      >
-        <p>
-          {selectedNotConfirmed.length} of the selected employees{' '}
-          {selectedNotConfirmed.length === 1 ? 'has' : 'have'} not confirmed availability:
-        </p>
-        <p>
-          <strong>{selectedNotConfirmed.map((c) => c.full_name).join(', ')}</strong>
-        </p>
-        <p className="muted">Board them anyway?</p>
-      </Modal>
-    </div>
   )
 }
 
