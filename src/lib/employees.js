@@ -44,20 +44,24 @@ export async function onboardEmployee(
   { installationId, signOnDate, expectedRotationDate },
   userId
 ) {
-  const { error: logErr } = await supabase.from('rotation_log').insert({
-    employee_id: employeeId,
-    installation_id: installationId,
-    sign_on_date: signOnDate,
-    expected_rotation_date: expectedRotationDate || null,
-    onboarded_by: userId ?? null,
-  })
+  const { data: log, error: logErr } = await supabase
+    .from('rotation_log')
+    .insert({
+      employee_id: employeeId,
+      installation_id: installationId,
+      sign_on_date: signOnDate,
+      expected_rotation_date: expectedRotationDate || null,
+      onboarded_by: userId ?? null,
+    })
+    .select('id')
+    .single()
   if (logErr) return { error: logErr }
 
   const { error: mirrorErr } = await supabase
     .from('employees')
     .update({ current_installation_id: installationId })
     .eq('id', employeeId)
-  return { error: mirrorErr }
+  return { data: log, error: mirrorErr }
 }
 
 // All rotation stints for an employee (history), most recent first.

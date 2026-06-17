@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ManifestRequests from './ManifestRequests'
+import ManifestRfms from './ManifestRfms'
 
 // The Manifest tab: the primary onboarding path. Two sub-views (Requests and
 // RFMs) plus a secondary Manual onboard (exception) entry point. Sub-views are
@@ -26,11 +27,7 @@ export default function ManifestTab({ userId }) {
         </button>
       </div>
 
-      {sub === 'requests' ? (
-        <ManifestRequests userId={userId} />
-      ) : (
-        <p className="muted empty-state">RFMs — coming up.</p>
-      )}
+      {sub === 'requests' ? <ManifestRequests userId={userId} /> : <ManifestRfms userId={userId} />}
     </div>
   )
 }

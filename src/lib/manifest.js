@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+import { onboardEmployee } from './employees'
+import { addDays } from './dates'
 
 // Manifest → RFM → boarding pipeline (migration 0006). Manifest requests are
 // what SKFS asks ONGC to mobilise; each line item names an incoming relief
@@ -98,4 +100,199 @@ export async function createManifestRequest(
   }
 
   return { error: null, id: req.id }
+}
+
+// Line items of a request (used to pre-fill an RFM from a request).
+export async function listRequestItems(manifestRequestId) {
+  return supabase
+    .from('manifest_request_items')
+    .select('id,employee_id,employee:employees!manifest_request_items_employee_id_fkey(id,full_name,emp_id)')
+    .eq('manifest_request_id', manifestRequestId)
+}
+
+// ---------------------------------------------------------------------
+// RFMs + line items
+// ---------------------------------------------------------------------
+export async function listRfms() {
+  return supabase
+    .from('rfms')
+    .select(
+      'id,rfm_number,sortie_date,mode_of_journey,manifest_request_id,' +
+        'installation:installations(id,name,type),' +
+        'line_items:rfm_line_items(id,outcome)'
+    )
+    .order('sortie_date', { ascending: false })
+    .order('created_at', { ascending: false })
+}
+
+export async function getRfm(id) {
+  return supabase
+    .from('rfms')
+    .select(
+      'id,rfm_number,sortie_date,scheduled_dep_time,scheduled_report_time,mode_of_journey,' +
+        'notes,manifest_request_id,installation_id,' +
+        'installation:installations(id,name,type),' +
+        'line_items:rfm_line_items(id,employee_id,vendor_code,outcome,outcome_reason,rotation_log_id,' +
+        'employee:employees(id,full_name,emp_id,designation:designations(id,name)))'
+    )
+    .eq('id', id)
+    .single()
+}
+
+// Log an RFM with its line items. If linked to a request, every line-item
+// employee that still has a 'pending' pairing from that request is moved to
+// 'rfm_listed' with rfm_line_item_id set.
+//
+// lineItems: [{ employeeId, vendorCode|null }]
+export async function createRfm(
+  {
+    rfmNumber,
+    installationId,
+    sortieDate,
+    scheduledDepTime,
+    scheduledReportTime,
+    modeOfJourney,
+    manifestRequestId,
+    notes,
+  },
+  lineItems
+) {
+  const { data: rfm, error: rfmErr } = await supabase
+    .from('rfms')
+    .insert({
+      rfm_number: rfmNumber.trim(),
+      installation_id: installationId,
+      sortie_date: sortieDate,
+      scheduled_dep_time: scheduledDepTime || null,
+      scheduled_report_time: scheduledReportTime || null,
+      mode_of_journey: modeOfJourney,
+      manifest_request_id: manifestRequestId || null,
+      notes: notes || null,
+    })
+    .select('id')
+    .single()
+  if (rfmErr) {
+    const message =
+      rfmErr.code === '23505' ? 'An RFM with that number already exists.' : rfmErr.message
+    return { error: { ...rfmErr, message } }
+  }
+
+  const rows = lineItems.map((li) => ({
+    rfm_id: rfm.id,
+    employee_id: li.employeeId,
+    vendor_code: li.vendorCode || null,
+  }))
+  const { data: insertedLines, error: liErr } = await supabase
+    .from('rfm_line_items')
+    .insert(rows)
+    .select('id,employee_id')
+  if (liErr) return { error: liErr }
+
+  // Link this RFM's lines to the request's pending pairings.
+  if (manifestRequestId) {
+    const { data: pendingPairings } = await supabase
+      .from('replacement_pairings')
+      .select('id,incoming_employee_id,manifest_request_items!inner(manifest_request_id)')
+      .eq('status', 'pending')
+      .eq('manifest_request_items.manifest_request_id', manifestRequestId)
+
+    for (const p of pendingPairings ?? []) {
+      const line = insertedLines.find((l) => l.employee_id === p.incoming_employee_id)
+      if (!line) continue
+      await supabase
+        .from('replacement_pairings')
+        .update({ status: 'rfm_listed', rfm_line_item_id: line.id })
+        .eq('id', p.id)
+    }
+  }
+
+  return { error: null, id: rfm.id }
+}
+
+// The pairing currently tied to a given RFM line item, if any.
+async function pairingForLine(lineItemId) {
+  const { data } = await supabase
+    .from('replacement_pairings')
+    .select('id,outgoing_employee_id')
+    .eq('rfm_line_item_id', lineItemId)
+    .limit(1)
+  return data?.[0] ?? null
+}
+
+// Record an outcome for one RFM line item: Boarded / Dropped / No-show.
+// `rfm` must carry { installation_id, sortie_date }. Returns { error }.
+export async function recordRfmOutcome(
+  lineItem,
+  outcome,
+  { reason, userId, rfm, maxServiceDays = 70, reliefGraceDays = 1 } = {}
+) {
+  const nowISO = new Date().toISOString()
+  const patch = {
+    outcome,
+    outcome_reason: reason?.trim() || null,
+    outcome_recorded_at: nowISO,
+    outcome_recorded_by: userId ?? null,
+  }
+
+  if (outcome === 'boarded') {
+    const { data: log, error: onErr } = await onboardEmployee(
+      lineItem.employee_id,
+      {
+        installationId: rfm.installation_id,
+        signOnDate: rfm.sortie_date,
+        expectedRotationDate: addDays(rfm.sortie_date, maxServiceDays),
+      },
+      userId
+    )
+    if (onErr) return { error: onErr }
+    patch.rotation_log_id = log?.id ?? null
+  }
+
+  const { error: liErr } = await supabase.from('rfm_line_items').update(patch).eq('id', lineItem.id)
+  if (liErr) return { error: liErr }
+
+  const pairing = await pairingForLine(lineItem.id)
+
+  if (outcome === 'boarded' && pairing) {
+    const { error } = await supabase
+      .from('replacement_pairings')
+      .update({
+        status: 'boarded',
+        relief_deadline: addDays(rfm.sortie_date, reliefGraceDays),
+      })
+      .eq('id', pairing.id)
+    if (error) return { error }
+  } else if (outcome === 'dropped' && pairing) {
+    const { error } = await supabase
+      .from('replacement_pairings')
+      .update({ status: 'dropped' })
+      .eq('id', pairing.id)
+    if (error) return { error }
+  } else if (outcome === 'no_show') {
+    if (pairing) {
+      const { error } = await supabase
+        .from('replacement_pairings')
+        .update({ status: 'no_show' })
+        .eq('id', pairing.id)
+      if (error) return { error }
+    }
+    // A proven-unreliable confirmation is revoked, and the no-show is counted.
+    await supabase
+      .from('availability')
+      .upsert(
+        { employee_id: lineItem.employee_id, confirmed: false, updated_by: userId ?? null },
+        { onConflict: 'employee_id' }
+      )
+    const { data: emp } = await supabase
+      .from('employees')
+      .select('no_show_count')
+      .eq('id', lineItem.employee_id)
+      .single()
+    await supabase
+      .from('employees')
+      .update({ no_show_count: (emp?.no_show_count ?? 0) + 1 })
+      .eq('id', lineItem.employee_id)
+  }
+
+  return { error: null }
 }

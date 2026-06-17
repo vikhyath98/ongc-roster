@@ -1574,6 +1574,37 @@ code {
   flex: 1;
 }
 
+/* RFM line item controls */
+.rfm-line-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.rfm-add-line {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.rfm-add-line select {
+  flex: 1;
+  font-size: 1rem;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.rfm-outcome-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.rfm-outcome-actions .btn {
+  flex: 1;
+}
+
 /* ---------- Boarding ---------- */
 .board-controls {
   display: grid;
