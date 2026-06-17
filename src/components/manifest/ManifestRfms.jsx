@@ -6,6 +6,7 @@ import {
   listManifestRequests,
   listRequestItems,
   recordRfmOutcome,
+  correctRfmOutcome,
 } from '../../lib/manifest'
 import { listInstallations } from '../../lib/reference'
 import { listEmployees } from '../../lib/employees'
@@ -26,6 +27,14 @@ function blockingDoc(cert) {
 }
 
 const MODES = ['Air', 'Sea', 'Other']
+const CORRECTABLE_OUTCOMES = ['boarded', 'dropped', 'no_show']
+
+// Local calendar day of a timestamptz, for the same-day correction window.
+function localDay(ts) {
+  if (!ts) return null
+  const d = new Date(ts)
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+}
 const OUTCOME_PILL = {
   listed: { label: 'Listed', cls: 'pill' },
   boarded: { label: 'Boarded', cls: 'pill pill--ok' },
@@ -360,6 +369,10 @@ function RfmDetailModal({ rfmId, userId, cfg, onClose, onChanged }) {
   const [error, setError] = useState('')
   const [reasons, setReasons] = useState({}) // lineId -> reason text
   const [busyLine, setBusyLine] = useState(null)
+  // Correction (same-day only): lineId being corrected + chosen new outcome + reason.
+  const [correctingId, setCorrectingId] = useState(null)
+  const [corrOutcome, setCorrOutcome] = useState('')
+  const [corrReason, setCorrReason] = useState('')
 
   async function load() {
     if (!rfmId) return
@@ -425,6 +438,41 @@ function RfmDetailModal({ rfmId, userId, cfg, onClose, onChanged }) {
     onChanged?.()
   }
 
+  function startCorrection(line) {
+    setCorrectingId(line.id)
+    setCorrOutcome('')
+    setCorrReason('')
+    setError('')
+  }
+
+  async function applyCorrection(line) {
+    if (!corrOutcome || !corrReason.trim()) return
+    if (corrOutcome === 'boarded') {
+      const cert = certFor(line)
+      if (!cert.certCurrent) {
+        setError(`Cannot board ${line.employee?.full_name} — ${blockingDoc(cert)}.`)
+        return
+      }
+    }
+    setBusyLine(line.id)
+    setError('')
+    const { error: err } = await correctRfmOutcome(line, corrOutcome, {
+      reason: corrReason,
+      userId,
+      rfm: { installation_id: rfm.installation_id, sortie_date: rfm.sortie_date },
+      maxServiceDays: cfg.maxServiceDays,
+      reliefGraceDays: cfg.reliefGraceDays,
+    })
+    setBusyLine(null)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    setCorrectingId(null)
+    await load()
+    onChanged?.()
+  }
+
   return (
     <Modal
       open={Boolean(rfmId)}
@@ -452,6 +500,8 @@ function RfmDetailModal({ rfmId, userId, cfg, onClose, onChanged }) {
               const settled = line.outcome !== 'listed'
               const cert = certFor(line)
               const certBlocked = !cert.certCurrent
+              const correctable = settled && localDay(line.outcome_recorded_at) === todayISO()
+              const isCorrecting = correctingId === line.id
               return (
                 <li key={line.id}>
                   <div className="roster-card roster-card--col">
@@ -512,6 +562,74 @@ function RfmDetailModal({ rfmId, userId, cfg, onClose, onChanged }) {
                           </button>
                         </div>
                       </>
+                    )}
+
+                    {settled && correctable && !isCorrecting && (
+                      <button
+                        type="button"
+                        className="linkish rfm-correct-link"
+                        onClick={() => startCorrection(line)}
+                      >
+                        Correct outcome…
+                      </button>
+                    )}
+                    {settled && !correctable && (
+                      <span className="muted rfm-locked">🔒 Locked — recorded on an earlier day</span>
+                    )}
+
+                    {settled && isCorrecting && (
+                      <div className="rfm-correct">
+                        <label className="field">
+                          <span>Change outcome to *</span>
+                          <select value={corrOutcome} onChange={(e) => setCorrOutcome(e.target.value)}>
+                            <option value="">Select…</option>
+                            {CORRECTABLE_OUTCOMES.filter((o) => o !== line.outcome).map((o) => (
+                              <option key={o} value={o}>
+                                {OUTCOME_PILL[o].label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {line.outcome === 'boarded' && corrOutcome && corrOutcome !== 'boarded' && (
+                          <p className="banner banner--error">
+                            ⚠ Destructive: this reverses the boarding — the rotation log created at
+                            sign-on is deleted and {line.employee?.full_name} is returned to base.
+                          </p>
+                        )}
+                        {corrOutcome === 'boarded' && certBlocked && (
+                          <p className="banner banner--error">⛔ {blockingDoc(cert)} — cannot board.</p>
+                        )}
+                        <label className="field">
+                          <span>Reason for the change *</span>
+                          <textarea
+                            rows={2}
+                            value={corrReason}
+                            onChange={(e) => setCorrReason(e.target.value)}
+                          />
+                        </label>
+                        <div className="rfm-outcome-actions">
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--sm"
+                            onClick={() => setCorrectingId(null)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--danger btn--sm"
+                            disabled={
+                              busyLine === line.id ||
+                              !corrOutcome ||
+                              !corrReason.trim() ||
+                              (corrOutcome === 'boarded' && certBlocked)
+                            }
+                            onClick={() => applyCorrection(line)}
+                          >
+                            {busyLine === line.id ? 'Applying…' : 'Apply correction'}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </li>

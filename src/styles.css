@@ -1605,6 +1605,25 @@ code {
   flex: 1;
 }
 
+.rfm-correct-link {
+  margin-top: 10px;
+  align-self: flex-start;
+}
+
+.rfm-locked {
+  margin-top: 8px;
+  font-size: 0.74rem;
+}
+
+.rfm-correct {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
 /* Secondary manual-onboard escape hatch */
 .manifest-manual {
   margin-top: 22px;

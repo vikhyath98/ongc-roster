@@ -132,7 +132,7 @@ export async function getRfm(id) {
       'id,rfm_number,sortie_date,scheduled_dep_time,scheduled_report_time,mode_of_journey,' +
         'notes,manifest_request_id,installation_id,' +
         'installation:installations(id,name,type),' +
-        'line_items:rfm_line_items(id,employee_id,vendor_code,outcome,outcome_reason,rotation_log_id,' +
+        'line_items:rfm_line_items(id,employee_id,vendor_code,outcome,outcome_reason,outcome_recorded_at,rotation_log_id,' +
         'employee:employees(id,full_name,emp_id,designation:designations(id,name)))'
     )
     .eq('id', id)
@@ -252,6 +252,44 @@ export async function manualOnboard({
   }
 
   return { error: null }
+}
+
+// Correct a mistaken outcome (only allowed on the recording day; the UI
+// enforces that window). Reverses the OLD outcome's side effects, then applies
+// the NEW one via recordRfmOutcome. Correcting away from Boarded is
+// destructive: it deletes the rotation_log row created at boarding and returns
+// the employee to base.
+export async function correctRfmOutcome(line, newOutcome, opts = {}) {
+  if (line.outcome === 'boarded') {
+    if (line.rotation_log_id) {
+      await supabase.from('rotation_log').delete().eq('id', line.rotation_log_id)
+      await supabase
+        .from('employees')
+        .update({ current_installation_id: null })
+        .eq('id', line.employee_id)
+    }
+    await supabase.from('rfm_line_items').update({ rotation_log_id: null }).eq('id', line.id)
+    const pairing = await pairingForLine(line.id)
+    if (pairing) {
+      await supabase
+        .from('replacement_pairings')
+        .update({ relief_deadline: null })
+        .eq('id', pairing.id)
+    }
+  } else if (line.outcome === 'no_show') {
+    // Undo the no-show counter bump (prior confirmed state can't be restored).
+    const { data: emp } = await supabase
+      .from('employees')
+      .select('no_show_count')
+      .eq('id', line.employee_id)
+      .single()
+    await supabase
+      .from('employees')
+      .update({ no_show_count: Math.max(0, (emp?.no_show_count ?? 0) - 1) })
+      .eq('id', line.employee_id)
+  }
+
+  return recordRfmOutcome({ ...line, rotation_log_id: null }, newOutcome, opts)
 }
 
 // The pairing currently tied to a given RFM line item, if any.
