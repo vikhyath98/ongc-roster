@@ -1,6 +1,13 @@
 import { supabase } from './supabase'
 import { onboardEmployee } from './employees'
-import { addDays } from './dates'
+import { addDays, todayISO } from './dates'
+
+const OUTCOME_LABEL = { listed: 'Listed', boarded: 'Boarded', dropped: 'Dropped', no_show: 'No-show' }
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const shortDate = (iso) => {
+  const d = new Date(iso + 'T00:00:00')
+  return `${d.getDate()}-${MONTHS[d.getMonth()]}`
+}
 
 // Manifest → RFM → boarding pipeline (migration 0006). Manifest requests are
 // what SKFS asks ONGC to mobilise; each line item names an incoming relief
@@ -289,7 +296,21 @@ export async function correctRfmOutcome(line, newOutcome, opts = {}) {
       .eq('id', line.employee_id)
   }
 
-  return recordRfmOutcome({ ...line, rotation_log_id: null }, newOutcome, opts)
+  // Preserve the original reason in the audit trail rather than overwriting it.
+  // Repeated corrections nest, so nothing is ever lost.
+  const orig = line.outcome_reason?.trim()
+  const origNote = orig
+    ? `[Original (${OUTCOME_LABEL[line.outcome] ?? line.outcome}): ${orig}]`
+    : `[Original: ${OUTCOME_LABEL[line.outcome] ?? line.outcome}, no reason given]`
+  const changeNote = `[Corrected ${shortDate(todayISO())} → ${
+    OUTCOME_LABEL[newOutcome] ?? newOutcome
+  }: ${opts.reason?.trim() || 'no reason given'}]`
+  const composedReason = `${origNote} ${changeNote}`
+
+  return recordRfmOutcome({ ...line, rotation_log_id: null }, newOutcome, {
+    ...opts,
+    reason: composedReason,
+  })
 }
 
 // The pairing currently tied to a given RFM line item, if any.
