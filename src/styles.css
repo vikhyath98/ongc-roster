@@ -1528,6 +1528,52 @@ code {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+/* Secondary segmented control (sub-tabs within a tab) */
+.seg--sub {
+  background: transparent;
+  padding: 0;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.seg--sub .seg__btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 16px;
+  flex: 0 1 auto;
+}
+.seg--sub .seg__btn--on {
+  border-color: var(--teal);
+  background: rgba(94, 197, 232, 0.12);
+}
+
+/* Manifest request status pill + inline status editor */
+.manifest-status--sent {
+  background: rgba(94, 197, 232, 0.2);
+  color: #0b6c8c;
+}
+.manifest-status--partially_approved {
+  background: rgba(244, 183, 64, 0.22);
+  color: #8a6300;
+}
+.manifest-status--approved {
+  background: rgba(47, 165, 106, 0.16);
+  color: #1c6e45;
+}
+.manifest-status--rejected {
+  background: rgba(226, 87, 76, 0.18);
+  color: #a4231a;
+}
+
+.manifest-status-edit {
+  margin-top: 10px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.manifest-status-edit select {
+  flex: 1;
+}
+
 /* ---------- Boarding ---------- */
 .board-controls {
   display: grid;
