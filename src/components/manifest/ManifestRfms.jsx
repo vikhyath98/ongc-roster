@@ -8,8 +8,10 @@ import {
   recordRfmOutcome,
   correctRfmOutcome,
 } from '../../lib/manifest'
-import { listInstallations } from '../../lib/reference'
-import { listEmployees } from '../../lib/employees'
+import { listInstallations, listDesignations } from '../../lib/reference'
+import { loadCandidates } from '../../lib/reserve'
+import { listInstallationRequirements } from '../../lib/configAdmin'
+import { listOffshoreStints } from '../../lib/boarding'
 import {
   listDocumentTypes,
   listAllEmployeeDocuments,
@@ -18,6 +20,7 @@ import {
 import { getAppConfig, configInt } from '../../lib/config'
 import { todayISO } from '../../lib/dates'
 import Modal from '../Modal'
+import LineItemPicker from './LineItemPicker'
 
 // First failing required document, "Name reason" (e.g. "Medical Fitness
 // Certificate expired"), matching the old Onboard cert gate (§6.4).
@@ -46,7 +49,11 @@ export default function ManifestRfms({ userId }) {
   const [rfms, setRfms] = useState([])
   const [installations, setInstallations] = useState([])
   const [requests, setRequests] = useState([])
-  const [employees, setEmployees] = useState([])
+  const [candidates, setCandidates] = useState([])
+  const [requirements, setRequirements] = useState([])
+  const [designations, setDesignations] = useState([])
+  const [offshore, setOffshore] = useState([])
+  const [thresholds, setThresholds] = useState({ min: 56, warning: 65, max: 70 })
   const [cfg, setCfg] = useState({ maxServiceDays: 70, reliefGraceDays: 1 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -55,11 +62,14 @@ export default function ManifestRfms({ userId }) {
 
   async function load() {
     setLoading(true)
-    const [rfmRes, instRes, reqRes, empRes, cfgRes] = await Promise.all([
+    const [rfmRes, instRes, reqRes, candRes, reqmtRes, desRes, offRes, cfgRes] = await Promise.all([
       listRfms(),
       listInstallations({ activeOnly: true }),
       listManifestRequests(),
-      listEmployees(),
+      loadCandidates(),
+      listInstallationRequirements(),
+      listDesignations(),
+      listOffshoreStints(),
       getAppConfig(),
     ])
     if (rfmRes.error) {
@@ -70,7 +80,11 @@ export default function ManifestRfms({ userId }) {
     setRfms(rfmRes.data ?? [])
     if (!instRes.error) setInstallations(instRes.data ?? [])
     if (!reqRes.error) setRequests(reqRes.data ?? [])
-    if (!empRes.error) setEmployees((empRes.data ?? []).filter((e) => e.employment_status === 'active'))
+    if (!candRes.error) setCandidates(candRes.candidates ?? [])
+    if (candRes.thresholds) setThresholds(candRes.thresholds)
+    if (!reqmtRes.error) setRequirements(reqmtRes.data ?? [])
+    if (!desRes.error) setDesignations(desRes.data ?? [])
+    if (!offRes.error) setOffshore(offRes.data ?? [])
     if (!cfgRes.error) {
       setCfg({
         maxServiceDays: configInt(cfgRes.config, 'max_service_days', 70),
@@ -133,7 +147,11 @@ export default function ManifestRfms({ userId }) {
         open={formOpen}
         installations={installations}
         requests={requests}
-        employees={employees}
+        candidates={candidates}
+        designations={designations}
+        requirements={requirements}
+        offshore={offshore}
+        thresholds={thresholds}
         onClose={() => setFormOpen(false)}
         onCreated={() => {
           setFormOpen(false)
@@ -152,7 +170,18 @@ export default function ManifestRfms({ userId }) {
   )
 }
 
-function LogRfmModal({ open, installations, requests, employees, onClose, onCreated }) {
+function LogRfmModal({
+  open,
+  installations,
+  requests,
+  candidates,
+  designations,
+  requirements,
+  offshore,
+  thresholds,
+  onClose,
+  onCreated,
+}) {
   const [rfmNumber, setRfmNumber] = useState('')
   const [installationId, setInstallationId] = useState('')
   const [sortieDate, setSortieDate] = useState(todayISO())
@@ -161,8 +190,8 @@ function LogRfmModal({ open, installations, requests, employees, onClose, onCrea
   const [mode, setMode] = useState('Air')
   const [requestId, setRequestId] = useState('')
   const [notes, setNotes] = useState('')
-  const [lines, setLines] = useState([]) // [{ employeeId, vendorCode }]
-  const [addEmpId, setAddEmpId] = useState('')
+  // [{ employeeId, name, vendorCode, replacingEmployeeId, replacingName, source }]
+  const [lines, setLines] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -177,14 +206,20 @@ function LogRfmModal({ open, installations, requests, employees, onClose, onCrea
     setRequestId('')
     setNotes('')
     setLines([])
-    setAddEmpId('')
     setBusy(false)
     setError('')
   }, [open])
 
-  const empName = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees])
+  const nameById = useMemo(() => {
+    const m = new Map()
+    for (const c of candidates) m.set(c.id, c.full_name)
+    for (const s of offshore) if (s.employee) m.set(s.employee.id, s.employee.full_name)
+    return m
+  }, [candidates, offshore])
 
-  // Pre-fill lines (and installation) when a request is linked.
+  // Pre-fill lines (and installation) when a request is linked. These come
+  // from the request and already have their own pending pairings, so they
+  // carry no replacing link here (createRfm moves those pairings to rfm_listed).
   async function onPickRequest(id) {
     setRequestId(id)
     if (!id) return
@@ -195,13 +230,40 @@ function LogRfmModal({ open, installations, requests, employees, onClose, onCrea
       setError(err.message)
       return
     }
-    setLines((data ?? []).map((it) => ({ employeeId: it.employee_id, vendorCode: '' })))
+    setLines(
+      (data ?? []).map((it) => ({
+        employeeId: it.employee_id,
+        name: it.employee?.full_name ?? nameById.get(it.employee_id) ?? '—',
+        vendorCode: '',
+        replacingEmployeeId: null,
+        replacingName: null,
+        source: 'request',
+      }))
+    )
   }
 
-  function addLine() {
-    if (!addEmpId || lines.some((l) => l.employeeId === addEmpId)) return
-    setLines((l) => [...l, { employeeId: addEmpId, vendorCode: '' }])
-    setAddEmpId('')
+  // Used ids across staged lines, so the ad-hoc picker can't double-add.
+  const usedIds = useMemo(() => {
+    const s = new Set()
+    for (const l of lines) {
+      s.add(l.employeeId)
+      if (l.replacingEmployeeId) s.add(l.replacingEmployeeId)
+    }
+    return s
+  }, [lines])
+
+  function addManualLine(item) {
+    setLines((l) => [
+      ...l,
+      {
+        employeeId: item.employeeId,
+        name: nameById.get(item.employeeId) ?? '—',
+        vendorCode: '',
+        replacingEmployeeId: item.replacingEmployeeId,
+        replacingName: item.replacingEmployeeId ? nameById.get(item.replacingEmployeeId) ?? '—' : null,
+        source: 'manual',
+      },
+    ])
   }
   const removeLine = (id) => setLines((l) => l.filter((x) => x.employeeId !== id))
   const setVendor = (id, v) =>
@@ -319,9 +381,9 @@ function LogRfmModal({ open, installations, requests, employees, onClose, onCrea
           <li key={l.employeeId}>
             <div className="roster-card">
               <div className="emp-card__main">
-                <span className="emp-card__name">{empName.get(l.employeeId)?.full_name ?? '—'}</span>
+                <span className="emp-card__name">{l.name}</span>
                 <span className="emp-card__meta">
-                  {empName.get(l.employeeId)?.emp_id ?? ''}
+                  {l.replacingName ? `replacing ${l.replacingName}` : l.source === 'request' ? 'from request' : 'ad-hoc'}
                 </span>
               </div>
               <div className="rfm-line-controls">
@@ -340,21 +402,22 @@ function LogRfmModal({ open, installations, requests, employees, onClose, onCrea
         ))}
       </ul>
 
-      <div className="rfm-add-line">
-        <select value={addEmpId} onChange={(e) => setAddEmpId(e.target.value)}>
-          <option value="">Add employee…</option>
-          {employees
-            .filter((e) => !lines.some((l) => l.employeeId === e.id))
-            .map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.full_name} — {e.designation?.name ?? '—'}
-              </option>
-            ))}
-        </select>
-        <button type="button" className="btn btn--ghost btn--sm" disabled={!addEmpId} onClick={addLine}>
-          Add
-        </button>
-      </div>
+      {installationId && (
+        <>
+          <h3 className="section-heading">Add employee (ad-hoc)</h3>
+          <LineItemPicker
+            installationId={installationId}
+            candidates={candidates}
+            designations={designations}
+            requirements={requirements}
+            offshore={offshore}
+            thresholds={thresholds}
+            usedIds={usedIds}
+            onAdd={addManualLine}
+            addLabel="＋ Add employee"
+          />
+        </>
+      )}
 
       {error && <p className="banner banner--error">{error}</p>}
     </Modal>

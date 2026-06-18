@@ -271,6 +271,29 @@ export async function createRfm(
     }
   }
 
+  // Ad-hoc lines that name a relief relationship get a pairing created
+  // directly at 'rfm_listed' (they skip the request's 'pending' stage),
+  // chained onto any prior failed attempt for the outgoing employee.
+  const adHocPairings = []
+  for (const li of lineItems) {
+    if (!li.replacingEmployeeId) continue
+    const line = insertedLines.find((l) => l.employee_id === li.employeeId)
+    if (!line) continue
+    const { id: retryOf } = await latestFailedPairingId(li.replacingEmployeeId)
+    adHocPairings.push({
+      manifest_request_item_id: null,
+      outgoing_employee_id: li.replacingEmployeeId,
+      incoming_employee_id: li.employeeId,
+      retry_of_pairing_id: retryOf,
+      rfm_line_item_id: line.id,
+      status: 'rfm_listed',
+    })
+  }
+  if (adHocPairings.length > 0) {
+    const { error: apErr } = await supabase.from('replacement_pairings').insert(adHocPairings)
+    if (apErr) return { error: apErr }
+  }
+
   return { error: null, id: rfm.id }
 }
 
