@@ -1624,6 +1624,17 @@ code {
   border-top: 1px dashed var(--border);
 }
 
+/* Offboard overstay segment editor */
+.seg-editor {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.seg-editor .dash-card__head {
+  margin-bottom: 8px;
+}
+
 /* Secondary manual-onboard escape hatch */
 .manifest-manual {
   margin-top: 22px;

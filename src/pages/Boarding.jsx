@@ -1,13 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { listOffshoreStints, batchOffboard } from '../lib/boarding'
 import {
   listDocumentTypes,
   listAllEmployeeDocuments,
   computeCertStatus,
 } from '../lib/documents'
+import {
+  offboardConfig,
+  understayPrefillReason,
+  computeOverstay,
+  recordOverstay,
+  recordUnderstay,
+  consumeActivePairing,
+} from '../lib/offboardChecks'
 import { useAuth } from '../context/AuthContext'
 import { todayISO, daysInclusive } from '../lib/dates'
 import SelectableEmployeeList from '../components/SelectableEmployeeList'
+import OffboardResolveModal from '../components/OffboardResolveModal'
 import ManifestTab from '../components/manifest/ManifestTab'
 
 // The Board screen. Onboarding now flows through the formal Manifest → RFM
@@ -53,13 +62,18 @@ function OffboardTab({ userId }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
+  const [cfg, setCfg] = useState(null)
+  // Sequential understay/overstay resolution while offboarding a selection.
+  const [resolve, setResolve] = useState(null)
+  const queueRef = useRef([])
 
   async function load() {
     setLoading(true)
-    const [stintRes, dtRes, docsRes] = await Promise.all([
+    const [stintRes, dtRes, docsRes, cfgRes] = await Promise.all([
       listOffshoreStints(),
       listDocumentTypes(),
       listAllEmployeeDocuments(),
+      offboardConfig(),
     ])
     if (stintRes.error) setError(stintRes.error.message)
     else setStints(stintRes.data ?? [])
@@ -72,6 +86,7 @@ function OffboardTab({ userId }) {
       }
       setDocsByEmp(m)
     }
+    setCfg(cfgRes)
     setLoading(false)
   }
 
@@ -110,20 +125,98 @@ function OffboardTab({ userId }) {
   const selectAll = (ids) => setSelected(new Set(ids))
   const clear = () => setSelected(new Set())
 
-  const canSubmit = signOffDate && selected.size > 0 && !busy
+  const canSubmit = signOffDate && selected.size > 0 && !busy && cfg
 
   async function submit() {
     setBusy(true)
     setError('')
     setDone('')
-    const chosen = stints.filter((s) => selected.has(s.id))
-    const { error: err, count } = await batchOffboard(chosen, signOffDate, userId)
-    setBusy(false)
-    if (err) {
-      setError(err.message)
+    queueRef.current = stints.filter((s) => selected.has(s.id))
+    await processNext()
+  }
+
+  // Walk the queue: normal stints offboard straight away; understay/overstay
+  // pause for a modal, then resume on confirm.
+  async function processNext() {
+    const q = queueRef.current
+    if (q.length === 0) {
+      setBusy(false)
+      setResolve(null)
+      setDone(`Offboard complete (sign-off ${signOffDate}).`)
+      setSelected(new Set())
+      load()
       return
     }
-    setDone(`Offboarded ${count} (sign-off ${signOffDate}).`)
+    const stint = q.shift()
+    const days = daysInclusive(stint.sign_on_date, signOffDate)
+
+    if (days < cfg.min) {
+      const prefillReason = await understayPrefillReason(stint.employee?.id)
+      setResolve({ stint, kind: 'understay', daysServed: days, prefillReason })
+      return
+    }
+    if (days > cfg.max) {
+      const over = await computeOverstay(stint, cfg, signOffDate)
+      setResolve({ stint, kind: 'overstay', daysServed: days, over })
+      return
+    }
+
+    const { error: err } = await batchOffboard([stint], signOffDate, userId)
+    if (err) {
+      setError(err.message)
+      setBusy(false)
+      return
+    }
+    await consumeActivePairing(stint.employee?.id)
+    await processNext()
+  }
+
+  async function confirmUnderstay(reason) {
+    const { stint, daysServed } = resolve
+    const { error: offErr } = await batchOffboard([stint], signOffDate, userId)
+    if (offErr) {
+      setError(offErr.message)
+      setBusy(false)
+      setResolve(null)
+      return
+    }
+    const { error: recErr } = await recordUnderstay(stint, { daysServed, reason, cfg, userId })
+    if (recErr) {
+      setError(recErr.message)
+      setBusy(false)
+      setResolve(null)
+      return
+    }
+    await consumeActivePairing(stint.employee?.id)
+    setResolve(null)
+    await processNext()
+  }
+
+  async function confirmOverstay(attrs) {
+    const { stint, over } = resolve
+    const { error: offErr } = await batchOffboard([stint], signOffDate, userId)
+    if (offErr) {
+      setError(offErr.message)
+      setBusy(false)
+      setResolve(null)
+      return
+    }
+    const { error: recErr } = await recordOverstay(stint, over, { ...attrs, userId })
+    if (recErr) {
+      setError(recErr.message)
+      setBusy(false)
+      setResolve(null)
+      return
+    }
+    setResolve(null)
+    await processNext()
+  }
+
+  function cancelResolve() {
+    // Abort the rest of this offboard run; anything already done stays done.
+    queueRef.current = []
+    setResolve(null)
+    setBusy(false)
     setSelected(new Set())
     load()
   }
@@ -187,6 +280,17 @@ function OffboardTab({ userId }) {
           {busy ? 'Offboarding…' : `Offboard ${selected.size || ''}`.trim()}
         </button>
       </div>
+
+      {resolve && cfg && (
+        <OffboardResolveModal
+          resolve={resolve}
+          cfg={cfg}
+          busy={busy}
+          onUnderstayConfirm={confirmUnderstay}
+          onOverstayConfirm={confirmOverstay}
+          onCancel={cancelResolve}
+        />
+      )}
     </div>
   )
 }
