@@ -58,25 +58,12 @@ export async function latestFailedPairingId(outgoingEmployeeId) {
 //
 // items: [{ employeeId, replacingEmployeeId|null, reason|null,
 //           isEmergencyException, exceptionReason|null }]
-export async function createManifestRequest(
-  { installationId, requestDate, notes, requestedBy },
-  items
-) {
-  const { data: req, error: reqErr } = await supabase
-    .from('manifest_requests')
-    .insert({
-      installation_id: installationId,
-      request_date: requestDate,
-      notes: notes || null,
-      requested_by: requestedBy ?? null,
-      status: 'sent',
-    })
-    .select('id')
-    .single()
-  if (reqErr) return { error: reqErr }
-
+// Insert line items for a request, plus a 'pending' pairing for each item that
+// names an outgoing employee (chained onto that employee's most recent prior
+// failed attempt). Shared by request creation and add-to-existing.
+async function insertItemsAndPairings(requestId, items) {
   const itemRows = items.map((it) => ({
-    manifest_request_id: req.id,
+    manifest_request_id: requestId,
     employee_id: it.employeeId,
     replacing_employee_id: it.replacingEmployeeId || null,
     reason: it.reason || null,
@@ -105,8 +92,79 @@ export async function createManifestRequest(
     const { error: pErr } = await supabase.from('replacement_pairings').insert(pairingRows)
     if (pErr) return { error: pErr }
   }
+  return { error: null }
+}
 
-  return { error: null, id: req.id }
+export async function createManifestRequest(
+  { installationId, requestDate, notes, requestedBy },
+  items
+) {
+  const { data: req, error: reqErr } = await supabase
+    .from('manifest_requests')
+    .insert({
+      installation_id: installationId,
+      request_date: requestDate,
+      notes: notes || null,
+      requested_by: requestedBy ?? null,
+      status: 'sent',
+    })
+    .select('id')
+    .single()
+  if (reqErr) return { error: reqErr }
+
+  const { error } = await insertItemsAndPairings(req.id, items)
+  return { error, id: req.id }
+}
+
+// Add more line items (with the same pairing logic) to an existing request.
+export async function addManifestItems(requestId, items) {
+  return insertItemsAndPairings(requestId, items)
+}
+
+// Full detail of one request: fields, any logged RFMs, and every line item
+// with its incoming/outgoing employees and current pairing status (+ the RFM
+// number it was listed on, if any).
+export async function getManifestRequest(id) {
+  return supabase
+    .from('manifest_requests')
+    .select(
+      'id,request_date,status,notes,installation_id,' +
+        'installation:installations(id,name,type),' +
+        'rfms:rfms(id,rfm_number),' +
+        'items:manifest_request_items(' +
+        'id,reason,is_emergency_exception,exception_reason,employee_id,replacing_employee_id,' +
+        'employee:employees!manifest_request_items_employee_id_fkey(id,full_name,emp_id,designation:designations(id,name)),' +
+        'replacing:employees!manifest_request_items_replacing_employee_id_fkey(id,full_name,emp_id,designation:designations(id,name)),' +
+        'pairings:replacement_pairings(id,status,rfm_line_item:rfm_line_items(id,rfm:rfms(id,rfm_number)))' +
+        ')'
+    )
+    .eq('id', id)
+    .single()
+}
+
+// Cancel a pairing — only allowed while still 'pending' (never pulled onto an
+// RFM). Keeps the row; just flips the status.
+export async function cancelPairing(pairingId) {
+  const { data, error } = await supabase
+    .from('replacement_pairings')
+    .select('status')
+    .eq('id', pairingId)
+    .single()
+  if (error) return { error }
+  if (data.status !== 'pending') {
+    return { error: { message: 'Only a pending pairing can be cancelled.' } }
+  }
+  return supabase.from('replacement_pairings').update({ status: 'cancelled' }).eq('id', pairingId)
+}
+
+// Edit request fields. Installation/date should be locked by the caller once
+// an RFM exists; notes are always editable.
+export async function updateManifestRequest(id, { installationId, requestDate, notes }) {
+  const patch = {}
+  if (installationId !== undefined) patch.installation_id = installationId
+  if (requestDate !== undefined) patch.request_date = requestDate
+  if (notes !== undefined) patch.notes = notes || null
+  return supabase.from('manifest_requests').update(patch).eq('id', id).select('id').single()
 }
 
 // Line items of a request (used to pre-fill an RFM from a request).
