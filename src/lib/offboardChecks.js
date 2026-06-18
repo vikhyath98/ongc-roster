@@ -17,6 +17,7 @@ export async function offboardConfig() {
     min: configInt(config, 'min_service_days', 56),
     warning: configInt(config, 'warning_day', 65),
     max: configInt(config, 'max_service_days', 70),
+    grace: configInt(config, 'relief_grace_period_days', 1),
     understayFixed: num('understay_fixed_cost'),
     understayDaily: num('understay_daily_rate'),
   }
@@ -41,7 +42,9 @@ export async function understayPrefillReason(employeeId) {
 export async function activeBoardedPairing(outgoingEmployeeId) {
   const { data } = await supabase
     .from('replacement_pairings')
-    .select('id,incoming_employee_id,retry_of_pairing_id,manifest_request_item_id')
+    .select(
+      'id,incoming_employee_id,retry_of_pairing_id,manifest_request_item_id,rfm_line_item_id,relief_deadline'
+    )
     .eq('outgoing_employee_id', outgoingEmployeeId)
     .eq('status', 'boarded')
     .is('consumed_at', null)
@@ -50,17 +53,23 @@ export async function activeBoardedPairing(outgoingEmployeeId) {
   return data?.[0] ?? null
 }
 
-// Relief arrival = the incoming employee's most recent stint sign-on. This is
-// path-agnostic: onboardEmployee() sets it to the RFM sortie date, the manual
-// onboard date, or the ad-hoc RFM sortie date respectively.
-async function reliefArrivalDate(incomingEmployeeId) {
-  const { data } = await supabase
-    .from('rotation_log')
-    .select('sign_on_date')
-    .eq('employee_id', incomingEmployeeId)
-    .order('sign_on_date', { ascending: false })
-    .limit(1)
-  return data?.[0]?.sign_on_date ?? null
+// Relief arrival date, taken from the pairing's authoritative source rather than
+// the incoming employee's latest rotation_log sign-on (which goes stale once
+// that employee starts a later, unrelated rotation):
+//   - RFM-boarded pairing -> the linked RFM's sortie_date (grace-independent).
+//   - Manual onboard (no RFM) -> relief_deadline was frozen at boarding as
+//     sign_on + grace, so the arrival is relief_deadline − grace.
+async function reliefArrivalDate(pairing, graceDays) {
+  if (pairing.rfm_line_item_id) {
+    const { data } = await supabase
+      .from('rfm_line_items')
+      .select('rfm:rfms(sortie_date)')
+      .eq('id', pairing.rfm_line_item_id)
+      .single()
+    return data?.rfm?.sortie_date ?? null
+  }
+  if (pairing.relief_deadline) return addDays(pairing.relief_deadline, -graceDays)
+  return null
 }
 
 async function pairingStatus(pairingId) {
@@ -118,7 +127,7 @@ export async function computeOverstay(stint, cfg, signOffDate) {
     }
   }
 
-  const reliefArrival = await reliefArrivalDate(pairing.incoming_employee_id)
+  const reliefArrival = await reliefArrivalDate(pairing, cfg.grace)
   let seg1Days
   let seg2Days
   if (reliefArrival) {
