@@ -1,371 +1,414 @@
-# ONGC Offshore Workforce Rotation System — Build Specification
+# ONGC Offshore Workforce Rotation System — Build Specification (v2)
 
-> This document is the source of truth for the build. Place it in the project root as `SPEC.md`. Claude Code should read it fully before scaffolding, and re-read relevant sections before building each module. Where this spec and a later instruction conflict, ask before proceeding.
+> This document is the source of truth for the build. Place it in the project root as `SPEC.md`, replacing any earlier version. Claude Code should read it fully before building, and re-read relevant sections before each module. Where this spec and a later instruction conflict, ask before proceeding.
+>
+> **Document status, so a fresh session orients instantly:** Sections 1–9 describe the original v1 build (11 steps) — fully built, tested, deployed, and live at `https://skfs-ongc-roster.vercel.app`. Sections 10–13 describe the post-v1 refinement pass (navigation restructure, Employee Master, real seed data) — fully built and pushed. Section 14 describes the manifestation/RFM/pairing/attribution system: **Workstream A is built, tested, and pushed to `origin/main`. Workstreams B through H are fully designed below but not yet built** — that is the next work to do, in the order listed in §14.9. Section 15 lists genuinely open/unresolved items. Section 16 is the updated deferred list.
 
 ---
 
 ## 1. Purpose & context
 
-A catering and housekeeping contractor staffs **14 ONGC offshore installations** (8 platforms, 6 rigs; 4 rigs currently unmobilised) across **291 positions**. Roughly 228 employees are offshore at any time and ~182 sit in a ground/base pool.
+A catering and housekeeping contractor staffs **14 ONGC offshore installations** (8 platforms, 6 rigs) across **290 required positions** (the exact per-installation, per-designation breakdown is now real data — see §13). Roughly 228–290 employees are offshore at any time and ~180+ sit in a ground/base pool.
 
-The current system is a fragile multi-sheet Excel workbook. This project replaces it with a mobile-first web app a manager can run from a phone on site — no laptop, no SharePoint, no formula breakage.
+The original system was a fragile multi-sheet Excel workbook. This project replaced it with a mobile-first web app a manager can run from a phone on site.
 
-**The core daily job the app must make easy:** know who is due to rotate off, find who from base can replace them (same designation, eligible, certified, confirmed-by-phone), and record onboard/offboard with a single tap.
+**The core daily job the app must make easy:** know who is due to rotate off, find who from base can replace them, run the actual ONGC manifestation paperwork (request → RFM → boarding outcome) that real-world rotation requires, and produce defensible evidence when a penalty needs to be reconciled with ONGC.
 
-**Scale:** maximum 10 concurrent users (managers). This is small — design for clarity and reliability, not for massive scale.
+**Scale:** maximum 10 concurrent users (managers). Design for clarity and reliability, not massive scale.
 
 ---
 
 ## 2. Tech stack (fixed)
 
-- **Frontend:** React + Vite, mobile-first responsive, installable as a PWA (add to home screen).
+- **Frontend:** React + Vite, mobile-first responsive PWA. Employee Master is desktop-first (see §11) but must degrade gracefully on mobile.
 - **Backend / database / auth:** Supabase (PostgreSQL, Supabase Auth, Realtime).
-- **Hosting:** Vercel (free tier).
+- **Hosting:** Vercel (free tier), auto-deploys on push to `main`.
 - **Cost target:** ₹0/month at this scale.
 
-All data access goes through the Supabase client. Use Supabase Row Level Security; for v1 all 10 users are trusted internal staff, so the policy is "any authenticated user can read/write all tables" (we can tighten per-installation later — see §9).
+RLS: any authenticated user can read/write all tables (10 trusted internal users). Per-installation scoping remains deferred (§16).
 
 ---
 
-## 3. Domain rules (the logic that must be correct)
-
-These are non-negotiable and several were mis-built in the Excel version. Get them exactly right.
+## 3. Domain rules — original v1 (still in force)
 
 ### 3.1 Rotation window
-- An offshore stint runs **56 to 70 days**.
-- **Day 56:** minimum service met — employee becomes *eligible* to rotate off.
-- **Day 65:** *warning* state (configurable).
-- **Day 70:** *hard threshold*. This is the last day before penalty exposure.
-- Day count = `today − sign_on_date` while offshore; `sign_off_date − sign_on_date` once complete. Count is **inclusive of the sign-on day** (day 1 = sign-on date).
+- Offshore stint: **56 to 70 days**. Day 56 = eligible to rotate. Day 65 = warning (configurable). Day 70 = hard threshold.
+- Day count is **inclusive** of the sign-on day (day 1 = sign-on date).
 
-### 3.2 Penalty rule (day-counter logic for v1)
-- The penalty is **₹1,000 per person per day** (configurable rate).
-- For v1, the penalty is driven by **day count alone**: once an offshore stint exceeds the hard threshold (day 70), every day beyond it accrues penalty automatically and the person shows as in penalty. `days_over = days_served − max_service_days` (floor at 0); `penalty = days_over × penalty_rate`. Penalty keeps accruing while the person remains offshore and finalises at sign-off.
-- **Reconciliation is a separate, later step.** In reality some of these are settled with ONGC. So a unit manager can mark any penalty as **reconciled**, which requires a mandatory remark stating it has been reconciled with ONGC. Reconciled penalties are recorded (who, when, the remark) and drop out of the active/unreconciled penalty exposure but remain in history. The app never deletes a penalty — it only moves it from `unreconciled` to `reconciled`.
-- The real-world ONGC nuance (penalty only applies when ONGC arranged transport and the person didn't board) is captured at reconciliation time via the manager's remark, not by the day-counter — see §9 for the fuller automated version deferred to phase 2.
+### 3.2 Penalty rule (day-counter, v1 — still the base computation)
+- ₹1,000/person/day (configurable). Once a stint exceeds day 70, every day beyond accrues automatically: `days_over = days_served − max_service_days` (floor 0), `total_penalty = days_over × penalty_rate`. Accrues while offshore, finalises at sign-off.
+- **This base computation is unchanged by §14.** What §14 adds is an *attribution layer* on top — splitting the existing `days_over`/`total_penalty` into who's responsible — not a change to how the penalty amount itself is calculated.
+- Reconciliation: a mandatory remark moves a penalty from unreconciled to reconciled. Never deleted.
 
-### 3.3 Rotations are batch-based
-Movements happen on helicopter/vessel schedules, not continuously. The app does not need to schedule transport, but onboard/offboard actions may happen in batches (multiple employees moved on the same date). Make batch onboarding/offboarding easy.
+### 3.3 Rotations are batch-based. Batch onboard/offboard for a shared transport date.
 
-### 3.4 Reserve pool definition (do not simplify this)
-"Base staff" ≠ "reserve pool". The reserve pool is the **intersection** of three independent conditions:
-
-```
-reserve_pool = base_staff
-  WHERE is_eligible          (enough rest; active employment)
-  AND   all_required_certs_current   (no required document missing or expired)
-  AND   availability_confirmed       (a manager called and they said yes, not expired)
-```
-
-A person can be eligible and fully certified yet still excluded because nobody has confirmed they will actually show up. High attrition during unpaid rest periods means availability must be actively confirmed, never assumed.
+### 3.4 Reserve pool definition
+`reserve_pool = base_staff WHERE is_eligible AND all_required_certs_current AND availability_confirmed`. All three conditions are independent; confirmation must be actively obtained, never assumed.
 
 ### 3.5 Confirmation expires
-A "yes" is not permanent. Each confirmation carries `confirmed_at` and `expires_at` (default validity configurable, e.g. 14 days). If the mobilisation is still far out when confirmation expires, the person re-surfaces for a fresh confirmation call rather than being trusted on a stale yes.
+`confirmed_at` / `expires_at` (default validity configurable, e.g. 14 days). Expired confirmations drop out of the reserve pool.
 
 ### 3.6 Call tracking
-For each base employee being courted for a need: track `call_count`, `last_call_at`, and `last_call_outcome` (`no_answer | call_back | confirmed | declined`). After repeated no-answers the UI should de-emphasise them so the manager stops wasting time. Keep a full `call_log` history too.
+`call_count`, `last_call_at`, `last_call_outcome` (`no_answer | call_back | confirmed | declined`), full `call_log` history.
 
 ### 3.7 Categories and designations
-- **Category** is the broad bucket: `Unskilled`, `Semi-skilled`, `Skilled`, `Outsourced`.
-- **Designation** is the specific role within a category: e.g. Electrician (Skilled), Cook (Semi-skilled), Steward (Unskilled), Pest Controller (Outsourced).
-- Replacement matching is **by designation** (an electrician replaces an electrician).
-- Wage rates are **out of scope for v1** — do not build wage fields yet, but leave the schema clean so they can be added later.
+- Category: `Unskilled | Semi-skilled | Skilled | Outsourced`.
+- Designation: specific role within a category (real list in §13).
+- Replacement matching is **by designation**, with the matching rule refined in §14.2 (exact match required for Skilled/Semi-skilled/Outsourced; Unskilled-to-Unskilled crossing allowed with a warning).
+- Wage rates remain out of scope.
 
 ---
 
-## 4. Database schema (PostgreSQL / Supabase)
+## 4. Database schema — original v1 tables (still in force, unchanged)
 
-Generate a single migration creating these tables. Use `uuid` PKs (`gen_random_uuid()`), `timestamptz` for timestamps, `created_at`/`updated_at` on mutable tables, and foreign keys with sensible `on delete` behaviour. Add indexes on every foreign key and on `rotation_log(sign_off_date)` (partial, where null) for the "currently offshore" query.
+`categories`, `designations`, `installations`, `app_users`, `employees` (base columns — see §10/§14 for columns added later), `document_types` (extended in §14 schema), `employee_documents` (extended in §14 schema), `rotation_log` (extended in §14 schema), `installation_requirements`, `availability`, `call_log`, `penalty_log`, `app_config`.
 
-```sql
--- Reference: categories
-create table categories (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null unique  -- Unskilled, Semi-skilled, Skilled, Outsourced
-);
+Refer to the original migrations `0001`–`0005` already applied in Supabase for exact DDL. Do not re-create these — only the additive columns/tables in §14's schema block are new.
 
--- Reference: designations (role within a category)
-create table designations (
-  id           uuid primary key default gen_random_uuid(),
-  name         text not null,
-  category_id  uuid not null references categories(id),
-  created_at   timestamptz not null default now(),
-  unique (name, category_id)
-);
+**One real schema change since v1, already applied (migration `0004`):** `document_types` moved from a single `applies_to_designation_id` FK to a proper many-to-many junction table, `document_type_designations`, because real certifications like ITI Certificate apply to multiple designations (Electrician AND Plumber). `document_types` also gained `tracks_dates` (independent of expiry — Aadhaar/PAN are dateless) and `employee_documents` gained `document_number`.
 
--- Installations: platforms and rigs
-create table installations (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null unique,
-  type        text not null check (type in ('platform','rig')),
-  is_active   boolean not null default true,  -- false for the 4 unmobilised rigs
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
-);
+---
 
--- Managers (linked to Supabase auth.users)
-create table app_users (
-  id            uuid primary key references auth.users(id),
-  full_name     text,
-  email         text,
-  role          text not null default 'manager' check (role in ('admin','manager')),
-  created_at    timestamptz not null default now()
-);
+## 5. Modules — original v1 list (superseded in part, see notes)
 
--- Employees
-create table employees (
-  id                       uuid primary key default gen_random_uuid(),
-  emp_id                   text not null unique,        -- the ID managers type/scan
-  full_name                text not null,
-  designation_id           uuid not null references designations(id),
-  phone                    text,
-  employment_status        text not null default 'active' check (employment_status in ('active','inactive')),
-  current_installation_id  uuid references installations(id),  -- null = on base; set on onboard, cleared on offboard
-  notes                    text,
-  created_at               timestamptz not null default now(),
-  updated_at               timestamptz not null default now()
-);
+1. **Dashboard** — see §12 for the rebuilt version (supersedes this entry).
+2. **Employee management** — renamed and rebuilt as **Employee Master**, see §11 (supersedes this entry).
+3. **Active roster** — rebuilt as a two-tab hub (Offshore / Base staff) with the Find Replacement sheet absorbed in, see §10 (supersedes this entry).
+4. **Boarding flow** — the **Onboard half is superseded** by the Manifest → RFM → Boarded flow in §14; the Offboard half is unchanged in mechanism but gains the understay/overstay-attribution logic in §14.6.
+5. **Replacement finder** — absorbed into Roster's Find Replacement sheet (§10). No longer a standalone screen/route.
+6. **Reserve pool** — absorbed into Roster's Base staff tab (§10). No longer a standalone screen/route.
+7. **Penalty tracker** — unchanged base mechanism (§3.2); gains a "View evidence" report button, see §14.7.
+8. **Configuration** — unchanged mechanism; gains new editable fields as new tables/columns are added (document type-designation mapping, `tracks_number`, the new `app_config` keys in §14).
 
--- Document type definitions (configurable; universal or designation-specific)
-create table document_types (
-  id                     uuid primary key default gen_random_uuid(),
-  name                   text not null unique,        -- e.g. 'Medical Fitness Certificate'
-  is_required            boolean not null default true,
-  applies_to_all         boolean not null default false,  -- true = every employee needs it
-  default_validity_days  int,                          -- for expiry calc; null = no auto-expiry
-  created_at             timestamptz not null default now()
-);
+---
 
--- Which specific designations require a non-universal document.
--- Many-to-many: one document (e.g. ITI Certificate) can apply to several designations
--- (Electrician AND Plumber) without duplicate document_type rows.
-create table document_type_designations (
-  document_type_id  uuid not null references document_types(id) on delete cascade,
-  designation_id    uuid not null references designations(id) on delete cascade,
-  primary key (document_type_id, designation_id)
-);
+## 6. Key logic — original v1 (still in force)
 
--- Per-employee document state (the checklist)
-create table employee_documents (
-  id                uuid primary key default gen_random_uuid(),
-  employee_id       uuid not null references employees(id) on delete cascade,
-  document_type_id  uuid not null references document_types(id),
-  status            text not null default 'pending' check (status in ('pending','submitted','verified')),
-  issue_date        date,
-  expiry_date       date,
-  verified_by       uuid references app_users(id),
-  verified_at       timestamptz,
-  created_at        timestamptz not null default now(),
-  updated_at        timestamptz not null default now(),
-  unique (employee_id, document_type_id)
-);
+§§6.1–6.7 from the original spec (currently-offshore/on-base definition, roster colour states, eligibility, cert-current check, replacement matching, confirmation lifecycle, penalty computation/reconciliation) remain accurate and unchanged. Refer to them as-is. The roster colour-state label **"Eligible" was renamed to "Plan Rotation"** in the UI (§12) — the day range and computation are identical, only the displayed label changed. This rename applies **only** to the rotation-window state, not to the unrelated "Eligible" badge used on base-staff cards (§3.4's eligibility condition) — those are two different concepts and both keep their original labels.
 
--- Rotation log: ONE ROW PER BOARDING/DEBOARDING PAIR (the operational + history core)
-create table rotation_log (
-  id                     uuid primary key default gen_random_uuid(),
-  employee_id            uuid not null references employees(id),
-  installation_id        uuid not null references installations(id),
-  sign_on_date           date not null,
-  sign_off_date          date,                  -- null = currently offshore
-  expected_rotation_date date,                  -- sign_on + target window (for punctuality)
-  onboarded_by           uuid references app_users(id),
-  offboarded_by          uuid references app_users(id),
-  remarks                text,
-  created_at             timestamptz not null default now(),
-  updated_at             timestamptz not null default now()
-);
+---
 
--- How many of each designation each installation needs
-create table installation_requirements (
-  id               uuid primary key default gen_random_uuid(),
-  installation_id  uuid not null references installations(id) on delete cascade,
-  designation_id   uuid not null references designations(id),
-  required_count   int not null default 0,
-  created_at       timestamptz not null default now(),
-  updated_at       timestamptz not null default now(),
-  unique (installation_id, designation_id)
-);
+## 7. Original v1 build sequence — complete
 
--- Current availability/confirmation state per base employee (one row per employee)
-create table availability (
-  id                  uuid primary key default gen_random_uuid(),
-  employee_id         uuid not null references employees(id) on delete cascade unique,
-  confirmed           boolean not null default false,
-  confirmed_at        timestamptz,
-  confirmed_for_date  date,                 -- the mobilisation date they confirmed for
-  expires_at          timestamptz,          -- confirmation validity cutoff
-  call_count          int not null default 0,
-  last_call_at        timestamptz,
-  last_call_outcome   text check (last_call_outcome in ('no_answer','call_back','confirmed','declined')),
-  updated_by          uuid references app_users(id),
-  updated_at          timestamptz not null default now()
-);
+Steps 1–11 from the original spec are fully built, tested, and deployed. Not reproduced here. See git history for the full sequence.
 
--- Full call history
-create table call_log (
-  id           uuid primary key default gen_random_uuid(),
-  employee_id  uuid not null references employees(id) on delete cascade,
-  called_by    uuid references app_users(id),
-  called_at    timestamptz not null default now(),
-  outcome      text not null check (outcome in ('no_answer','call_back','confirmed','declined')),
-  notes        text
-);
+---
 
--- Penalty log (auto-computed from day count; reconciled later by a manager)
--- A row exists per offshore stint that crosses the hard threshold. days_over and
--- total_penalty are refreshed from day count while offshore and finalised at sign-off.
-create table penalty_log (
-  id                     uuid primary key default gen_random_uuid(),
-  employee_id            uuid not null references employees(id),
-  installation_id        uuid not null references installations(id),
-  rotation_log_id        uuid references rotation_log(id) unique,  -- one penalty per stint
-  days_over              int not null default 0,        -- days_served - max_service_days (floor 0)
-  daily_penalty_rate     numeric not null default 1000,
-  total_penalty          numeric not null default 0,    -- days_over * daily_penalty_rate
-  status                 text not null default 'unreconciled' check (status in ('unreconciled','reconciled')),
-  reconciled_by          uuid references app_users(id),
-  reconciled_at          timestamptz,
-  reconciliation_remark  text,                            -- REQUIRED (non-empty) when status = 'reconciled'
-  created_at             timestamptz not null default now(),
-  updated_at             timestamptz not null default now()
-);
+## 8. Prerequisites — unchanged, already satisfied.
 
--- Configurable thresholds and rates
-create table app_config (
-  key         text primary key,
-  value       text not null,
-  updated_by  uuid references app_users(id),
-  updated_at  timestamptz not null default now()
-);
+---
+
+## 9. Original v1 deferred list — see §16 for the current version (several items here have since been built; §16 replaces this section).
+
+---
+
+## 10. Navigation & Roster restructure (built)
+
+The original 8-tab horizontally-scrolling bottom nav was replaced.
+
+**Bottom nav (4 items):** Home | Roster | Board | Penalty.
+**Top-right hamburger (☰):** opens a drawer/menu containing Employee Master, Configuration, Reports (§14.7), and Sign out. Identity (signed-in manager's name/email) also lives here.
+
+**Roster** is now a two-tab operational hub:
+
+- **Offshore tab:** a flat card list (not grouped by installation), sorted by days served descending (most urgent first). Each card shows name, designation, 📍 installation, days served, colour-state pill, rotation deadline, and a **"Find replacement"** button (visible at day 56+). Filterable by installation and designation, with a "shown of total" count.
+- **Base staff tab:** this is the reserve pool, in full view. Each card shows rest days, eligibility state (with the specific blocking reason if not eligible), confirmation badge + expiry, call count/last outcome. Filterable by designation. A "Select" toggle enables multi-select with a sticky "Confirm Availability (N)" action bar (§14.3 will route manifest-request candidates through this same confirmed state).
+- **Find Replacement sheet:** opens from an Offshore card's "Find replacement" button. Shows the target employee at top (days served, deadline, colour state), a "Confirmed ready" section (confirmed + unexpired + eligible + cert-current candidates of the same designation, read-only display), an "Available to call" section (eligible + cert-current but unconfirmed, ranked by fewest/best calls, with inline Call and Confirm actions), and a "Not available" section at the bottom (cert-blocked, declined, inactive — greyed out with the specific reason). Closing returns to Roster.
+
+The standalone Reserve Pool and Replacement Finder pages/routes were deleted; their logic lives in `lib/reserve.js`, now consumed by Roster.
+
+---
+
+## 11. Employee Master (built, renamed from "Staff")
+
+Desktop-first, since the primary users (admin/HR) work from a laptop, while remaining accessible on mobile via graceful card-layout degradation.
+
+**Desktop:** dense table view — columns include Emp ID, Name, Designation, Category, Status, Current Location, Certs, Last Sign-off. Sortable, multi-column search/filter. Row click opens a right-side detail panel (not a full-screen modal) so the table stays visible — shows employee detail, the full document checklist, and a **read-only Rotation History section** (every stint, most-recent-first, with installation, sign-on/sign-off or "Currently offshore", inclusive days served, Completed/Offshore status, and a red highlight + `days_over` for any stint that exceeded day 70).
+
+**Toolbar / bulk actions (multi-select with checkboxes, sticky action bar when active):**
+- **Import / Export (.xlsx).** See the extended template below.
+- **Bulk Verify Documents** — pick document type(s), optional shared issue/expiry, applies only where applicable to each selected employee's designation, reports "X verified across Y employees, Z skipped (not applicable)".
+- **Confirm Availability** (bulk) — optional shared confirmed-for date, skips currently-offshore employees, reports "N confirmed, X skipped (currently offshore)".
+- **Set Active/Inactive.**
+
+**Delete policy (smart delete):** the standard removal mechanism is the Active/Inactive toggle (soft delete, preserves history). **Hard delete is only available for an employee with zero `rotation_log` rows** (true data-entry mistakes/test records) — the delete control is not even shown for anyone with rotation history.
+
+### Extended import/export template
+
+Columns, in order:
+```
+emp_id, full_name, designation, phone, employment_status, notes,
+current_location, current_sign_on,
+stint_1_installation, stint_1_sign_on, stint_1_sign_off,
+stint_2_installation, stint_2_sign_on, stint_2_sign_off,
+stint_3_installation, stint_3_sign_on, stint_3_sign_off
 ```
 
-**Seed `app_config` with these defaults (all editable in the app):**
+Validation rules (all enforced, surfaced clearly in the import preview):
+1. **All-or-nothing per stint** — if any column in a stint is filled, all three must be; otherwise reject: "Stint N is incomplete."
+2. **No gaps in sequence** — Stint 2 requires Stint 1 filled; Stint 3 requires both prior. Reject otherwise.
+3. **Chronological order across stints** — each stint's sign_off must precede the next stint's (or current_sign_on's) sign_on.
+4. **sign_off must be after sign_on** within a stint.
+5. **Completed stints must have a past sign_off** (not today/future).
+6. **Installation name matching** — case-insensitive against the real installations list (§13). Unrecognised name → reject with the specific name.
+7. **Days-served sanity warning (non-blocking)** — any stint under 10 days or over 150 days shows a yellow warning in the preview but still imports.
+8. **current_location + current_sign_on** — both or neither; `current_sign_on` must be in the past and after the most recent stint's sign_off.
+9. **No history and no current location** → imported as a new base employee.
 
-| key | value | meaning |
+On a valid row: creates the employee, inserts a closed `rotation_log` row per valid stint (oldest to newest, `onboarded_by`/`offboarded_by` = importer), and if `current_location`/`current_sign_on` are present, opens a current (open) `rotation_log` row via the same logic as `onboardEmployee()`.
+
+**Export** adds read-only columns (clearly labelled `[Read Only]`, ignored on re-import): `cert_status`, `cert_issues`, `days_since_signoff`, `confirmation_status`, and `dob_mismatch` (§14.8). Rotation history in the export reflects the 3 most recent completed stints, so an exported file can be re-imported cleanly.
+
+---
+
+## 12. Dashboard (rebuilt)
+
+- **Headcount cards** — Offshore / On base / Inactive, each deep-linking to Roster or Employee Master.
+- **Rotation window** — four colour bands: In service (green, not clickable) / **Plan Rotation** (teal) / Warning (amber) / Over threshold (red). The latter three are clickable, opening a modal titled "<band> — N employees" with a breakdown by designation (count descending) and the installations each designation's affected employees are at.
+- **Reserve readiness** — two numbers: "Confirmed ready" (the strict §3.4 reserve pool count) and "Eligible (unconfirmed)" (eligible + cert-current but not confirmed). Both deep-link to Roster → Base staff, pre-filtered. A health line below: green if confirmed-ready ≥ the total rotation-window count, amber if 50–99% of it, red if under 50%.
+- **Staffing variance** — per active installation with configured `installation_requirements`, compares required vs. current-offshore count per designation. Shows "Short N [designation]" (red) or "Surplus N [designation]" (amber); balanced rows/installations are hidden entirely; "All installations fully staffed" if everything balances; a setup hint if no requirements are configured anywhere.
+- **(Pending — §14.7) Three manifestation alerts** will be added here: Awaiting re-manifest, Relief failed to arrive, Manifest needed soon.
+
+---
+
+## 13. Real seed data (built)
+
+**Installations — Platforms:** ICP, SHP, SAGAR SAMRAT, WIN, NEELAM, BLQ-I, TCPP, R-12.
+**Installations — Rigs:** SAGAR JYOTI, SAGAR GAURAV, SAGAR SHAKTI, SAGAR UDAY, SAGAR RATNA, SAGAR KIRAN.
+*(Open item: the ops team separately mentioned "BLQ-1, BLQ-2" under a chopper-field grouping; whether BLQ-2 is a genuinely new, not-yet-seeded installation or a naming variant of BLQ-I is unresolved — see §15.)*
+
+**Designations:** Catering Manager, Cook, Assistant Cook, Electrician, Plumber, Housekeeper, Laundry, Room Boy, Pest Controller. Laundry and Room Boy are only required at SAGAR JYOTI.
+
+**Installation requirements:** real per-installation, per-designation headcounts are seeded, summing to 290 required positions total. See `installation_requirements` table / Configuration screen for the exact matrix.
+
+**Document types (real certification list):**
+
+| Document | Required of | Notes |
 |---|---|---|
-| `min_service_days` | `56` | eligible to rotate |
-| `warning_day` | `65` | warning state |
-| `max_service_days` | `70` | hard threshold |
-| `penalty_rate` | `1000` | ₹ per person per day |
-| `confirmation_validity_days` | `14` | how long a confirmation stays valid |
-
-**Seed data to load:**
-- 14 installations (8 platforms, 6 rigs); mark the 4 unmobilised rigs `is_active = false`.
-- The 4 categories.
-- Designations as they exist (Claude Code: leave a clearly-marked seed file the user fills in with real designations). The designation names referenced below — Catering Manager, Cook, Asst Cook, Electrician, Plumber, Housekeeper — must exist for the document mapping to attach.
-- Document types per the table below.
-
-**Document types seed.** Universal documents (`applies_to_all = true`) are required of every employee. The rest attach to specific designations via `document_type_designations`.
-
-| Document | Required of | Validity |
-|---|---|---|
-| PCC (Police Clearance Certificate) | All | manager-set expiry |
-| Aadhaar Card | All | none |
-| PAN Card | All | none |
-| Passport | All | manager-set expiry |
+| PCC | All | manager-set expiry |
+| Aadhaar Card | All | number only, no dates (`tracks_dates=false`) |
+| PAN Card | All | number only, no dates |
+| Passport | All | number AND dates (§14.6 `tracks_number`) |
 | STCW/BST | All | manager-set expiry |
 | HUET | All | manager-set expiry |
-| Medical Fitness Certificate | All | 365 days default |
+| Medical Fitness Certificate | All | 365-day default validity |
 | HACCP | Catering Manager | manager-set expiry |
-| Hotel Management (2 yrs exp) OR 5-yr Offshore Experience Letter | Catering Manager, Cook | none |
-| Cookery Certificate | Asst Cook | none |
+| Hotel Mgmt (2yr) OR 5yr Experience Letter | Catering Manager, Cook | single combined document_type; verifying once satisfies it |
+| Cookery Certificate | Assistant Cook | none |
 | PWD Licence | Electrician | manager-set expiry |
-| ITI Certificate | Electrician, Plumber | none |
+| ITI Certificate | Electrician, Plumber | many-to-many via `document_type_designations` |
 | 1-yr Experience Letter | Housekeeper | none |
 
-Notes for the build:
-- The two "OR" documents (Hotel Mgmt **or** Experience Letter) are modelled as a **single document_type** whose name states the alternation. Verifying it once satisfies the requirement — the manager records which underlying document they checked in the document's notes/issue fields. A proper "any-of group" requirement can be added in phase 2 if needed (see §9); do not build it now.
-- `ITI Certificate` is one document_type row linked to **both** Electrician and Plumber via two `document_type_designations` rows — this is exactly why the model is many-to-many.
-- Only `Medical Fitness Certificate` gets a `default_validity_days` (365). For the others that expire in reality (PCC, Passport, STCW/BST, HUET, PWD Licence), leave `default_validity_days` null and let the manager set `expiry_date` per employee record; these are all editable in Configuration.
+A field-grouping concept (chopper fields like Tapti/B&S/South/North/NH grouping multiple installations) was discussed and explicitly **parked** — not built, may be added later as a lightweight optional `field` label on installations purely for future filtering/analytics.
 
 ---
 
-## 5. Modules / screens
+## 14. Manifestation tracking system
 
-Build mobile-first. Each screen must be usable one-handed on a phone.
+This is the real-world ONGC process the app was missing: a mail request naming people and a destination → ONGC issues an RFM (with some requests not approved) → actual boarding (with some approved people still dropped or no-show) → and the resulting paper trail is what makes a later overstay penalty reconciliation possible or not.
 
-1. **Dashboard** — counts (offshore / on base / inactive), how many are in the rotation window now, total open penalty exposure, and a short "needs attention" list (anyone ≥ warning day).
-2. **Employee management** — searchable list by name/emp_id/designation; add and edit employees; per-employee document checklist with status and expiry.
-3. **Active roster** — grouped by installation; each person shows days served and a colour state (see §6.2); filterable by installation and designation.
-4. **Boarding flow** — onboard (pick installation + date, defaults today, sets `current_installation_id`, opens a `rotation_log` row) and offboard (sets `sign_off_date`, clears `current_installation_id`). Support batch onboard/offboard for a shared transport date.
-5. **Replacement finder** — pick (or auto-surface) a person in the window; show available base candidates of the **same designation**, ranked, each with rest days, cert status, call count, and confirm/call actions. (This is the headline screen — see the agreed mockup.)
-6. **Reserve pool** — all base staff passing the §3.4 filter; filter by designation; shows confirmation + expiry + call state.
-7. **Penalty tracker** — auto-lists every offshore stint past the hard threshold with its live accruing penalty (no manual entry to create one). Two views: `unreconciled` (active exposure, with a running total) and `reconciled` (history). A "reconcile" action requires a non-empty remark stating it has been reconciled with ONGC; it records `reconciled_by`/`reconciled_at` and moves the row to reconciled. Nothing is ever deleted.
-8. **Configuration** — edit thresholds/rates (`app_config`), installations, designations, document types (universal or designation-specific, via the many-to-many mapping), and installation requirements.
+**Status: Workstream A (§14.1–§14.5) is built, tested, and pushed. Workstreams B–H (§14.6–§14.8, plus §10/§11 enhancements) are designed in full below, not yet built.**
+
+### 14.1 Schema (built — migrations `0006`, `0007`)
+
+```sql
+manifest_requests
+  id, installation_id (fk installations), request_date,
+  requested_by (fk app_users), notes,
+  status: 'sent' | 'partially_approved' | 'approved' | 'rejected',
+  created_at, updated_at
+
+manifest_request_items
+  id, manifest_request_id (fk, cascade),
+  employee_id (fk employees) -- the incoming/relief employee,
+  replacing_employee_id (fk employees, nullable) -- the outgoing
+    employee currently offshore being relieved,
+  reason (text, nullable),
+  is_emergency_exception (boolean, default false),
+  exception_reason (text, nullable) -- mandatory in UI when
+    is_emergency_exception is true,
+  created_at
+
+replacement_pairings
+  id,
+  manifest_request_item_id (fk, nullable, on delete set null),
+  outgoing_employee_id (fk employees),
+  incoming_employee_id (fk employees),
+  retry_of_pairing_id (fk replacement_pairings, nullable),
+  rfm_line_item_id (fk rfm_line_items, nullable, on delete set null),
+  status: 'pending' | 'rfm_listed' | 'boarded' | 'dropped' |
+          'no_show' | 'cancelled',
+  relief_deadline (date, nullable) -- set when status='boarded':
+    sortie_date + relief_grace_period_days (app_config),
+  consumed_at (timestamptz, nullable) -- set when resolved at
+    the outgoing employee's eventual offboard,
+  created_at, updated_at
+
+rfms
+  id, rfm_number (unique text), manifest_request_id (fk, nullable),
+  installation_id (fk installations), sortie_date,
+  scheduled_dep_time (time), scheduled_report_time (time),
+  mode_of_journey: 'Air' | 'Sea' | 'Other' (not null, default 'Air'),
+  received_at (default now()), notes, created_at, updated_at
+
+rfm_line_items
+  id, rfm_id (fk, cascade), employee_id (fk employees),
+  vendor_code (text, nullable),
+  outcome: 'listed' | 'boarded' | 'dropped' | 'no_show'
+    (default 'listed'),
+  outcome_reason (text, nullable -- optional for both dropped
+    and no_show; on correction this is composed as a dated
+    audit note that PRESERVES the original reason rather than
+    overwriting it, e.g.
+    "[Original (Dropped): reason] [Corrected 18-Jun -> No-show: reason]"),
+  outcome_recorded_at, outcome_recorded_by (fk app_users),
+  rotation_log_id (fk rotation_log, nullable),
+  created_at, updated_at
+
+overstay_attributions   -- (Workstream B, not yet built)
+  id, rotation_log_id (fk rotation_log, unique),
+  replacement_pairing_id (fk replacement_pairings, nullable),
+  segment_1_days (int, default 0),
+  segment_1_attribution: 'ongc' | 'skfs' | null,
+  segment_1_overridden (boolean, default false),
+  segment_1_remark (text, nullable -- required if overridden),
+  segment_2_days (int, default 0),
+  segment_2_attribution: 'ongc' | 'skfs' | null,
+  segment_2_overridden (boolean, default false),
+  segment_2_remark (text, nullable -- required if overridden),
+  created_by (fk app_users), created_at, updated_at
+
+understay_records   -- (Workstream B, not yet built)
+  id, rotation_log_id (fk rotation_log), employee_id (fk employees),
+  days_short (int), reason (text, nullable),
+  fixed_cost (numeric), daily_rate (numeric), total_cost (numeric),
+  created_by (fk app_users), created_at
+
+-- additive columns already applied:
+document_types.tracks_number (boolean, default false)
+  -- true for Aadhaar Card, PAN Card, Passport
+employee_documents.date_of_birth (date, nullable)
+employees.base_location_type: 'guesthouse' | 'hometown' | null
+employees.recall_lead_time_days (int, nullable)
+employees.no_show_count (int, default 0)
+rotation_log.is_manual_exception (boolean, default false)
+rotation_log.manual_exception_reason (text, nullable)
+
+app_config additions:
+  relief_grace_period_days = 1
+  understay_fixed_cost = 0      -- PLACEHOLDER, mark clearly in UI
+  understay_daily_rate = 0      -- PLACEHOLDER, mark clearly in UI
+```
+
+No new threshold needed for the manifest safe window — it reuses the existing `min_service_days` (56) and `warning_day` (65).
+
+### 14.2 Manifest Requests (built)
+
+Board screen is now **Manifest | Offboard** (the standalone Onboard tab no longer exists as a peer tab — see §14.5 for the only remaining manual onboarding path).
+
+**Requests sub-view:** request cards (installation, date, status, employee count) are clickable, opening a detail modal showing every line item with its live pairing status (pending/rfm_listed/boarded/dropped/no_show/cancelled).
+
+**Creating/editing a request** uses a shared `LineItemPicker` component (also reused by §14.3's ad-hoc RFM lines and the manual exception path), enforcing identically everywhere:
+
+- **Confirmed-only picker (hard restriction):** the incoming/relief employee dropdown shows only base staff who are `confirmed = true` and unexpired. If zero exist for a relevant designation: "No confirmed [designation] candidates available. Confirm availability first." with a shortcut to Roster → Base staff.
+- **Day-56 gate (hard block) on the replacing/outgoing employee:** if their `days_served < min_service_days`, the line item cannot be added unless the manager checks "Emergency exception" and provides a mandatory `exception_reason`.
+- **Day-65 warning (non-blocking):** if the replacing employee is already past `warning_day`, show: "The safe manifesting window (day 56–65) has closed. Any resulting overstay is likely to default toward SKFS responsibility." Item can still be added.
+- **Designation matching rule:** same designation always passes silently. Skilled, Semi-skilled, and Outsourced designations require an **exact designation match** — any mismatch is a hard block ("[Designation] can only be replaced by another [Designation]"). Unskilled designations may cross-replace a different Unskilled designation, but show a non-blocking warning ("⚠️ [Incoming] is replacing [Outgoing] — different roles, please confirm this is intended.").
+- **Dedupe:** any employee already used (incoming or outgoing) elsewhere in this same request (including cancelled line items) is removed from both dropdowns.
+
+On creating the request, `replacement_pairings` rows are created for every valid line item (status `'pending'`), with `retry_of_pairing_id` set to the most recent prior `dropped`/`no_show` pairing for that same outgoing employee, if one exists.
+
+**Editing an existing request:** new line items can be added later using the same picker/gates. A line item can be **cancelled** (status → `'cancelled'`, never deleted) only while its pairing is still `'pending'` — once it's been pulled into an RFM (`'rfm_listed'` or beyond), it's locked: "Already logged on RFM #[number] — locked." Once any RFM has been logged against a request, that request's **installation and date lock** (notes remain editable always). **Requests themselves are never deletable.** Reason-only line items (no replacing employee specified) have no pairing and therefore no cancel action, but still count toward dedupe.
+
+The request's `status` field (sent/partially_approved/approved/rejected) is manager-edited bookkeeping reflecting the email/phone conversation with ONGC — it does **not** automatically affect RFMs, pairings, or any employee record. **Rejected requests are excluded from the "link to manifest request" picker when logging an RFM**, so rejected names can't accidentally be pulled into a real boarding.
+
+### 14.3 RFMs (built)
+
+**Log RFM:** RFM number, installation, sortie date, scheduled dep/report time, mode of journey, optional link to a manifest_request (pre-fills its line items). Each line gets an optional `vendor_code`.
+
+**Ad-hoc line items** (added directly to an RFM, not pre-filled from a request) use the exact same `LineItemPicker` safeguards as §14.2 — confirmed-only, day-56 gate with exception, designation matching, dedupe within this RFM. If a replacing employee is named, a `replacement_pairings` row is created immediately at status `'rfm_listed'` (no `manifest_request_item_id`), with the same `retry_of_pairing_id` chaining — closing what would otherwise be a gap in the attribution evidence for relief that didn't go through a formal request.
+
+**Three-state outcome per line item**, each settable once per calendar day with a same-day correction path (see below):
+
+- **Boarded** — gated by the §6.4 cert-current check first: if the employee's required documents are missing/expired, the action is blocked and the specific document is named, no override. On success: triggers `onboardEmployee()` (installation, sign_on = sortie_date), sets the line's `rotation_log_id`, and if a pairing exists for this line, sets it to `'boarded'` with `relief_deadline = sortie_date + relief_grace_period_days`.
+- **Dropped** (ONGC bumped — no chopper/boat space) — `outcome_reason` optional. Sets any linked pairing to `'dropped'`. Employee becomes "awaiting re-manifest" (§14.7), flagged as a drop, not a no-show.
+- **No-show** (seat was available, employee didn't show) — `outcome_reason` **optional, never required** (too many possible reasons to force one). Sets any linked pairing to `'no_show'`. Immediately flips the employee's `confirmed` to `false` and increments `no_show_count`. Employee becomes "awaiting re-manifest" (§14.7), flagged distinctly as a no-show.
+
+**Same-day correction:** an outcome can be corrected only on the calendar day it was recorded (based on local `outcome_recorded_at`); afterward it's permanently locked ("🔒 Locked — recorded on an earlier day"). Correcting requires picking a new outcome plus a mandatory reason. Correcting *away from* Boarded reverses it destructively (deletes the created `rotation_log` row, returns the employee to base, clears the line's `rotation_log_id` and the pairing's `relief_deadline` — flagged clearly as destructive before confirming). Correcting *away from* No-show decrements `no_show_count` but does not restore the employee's prior `confirmed` value (known, accepted limitation — re-confirm via any of the existing confirm entry points). A correction resets the recording timestamp, so it remains correctable for the rest of that same day; after midnight it locks. The reason is composed as a dated audit note preserving the original (see schema block), never silently overwritten.
+
+### 14.4 Replacement pairings — lifecycle summary (built)
+
+A pairing is created the moment a manifest request item or ad-hoc RFM line names a specific outgoing employee being relieved — not deferred until a successful boarding. This means even failed attempts (dropped, no-show) are tracked as first-class history against the outgoing employee, and a chain of retries (`retry_of_pairing_id`) is preserved when a manager re-requests after a failure. Status flow: `pending` → `rfm_listed` → one of `boarded` / `dropped` / `no_show`, or `cancelled` from `pending` only. Only one pairing per outgoing employee should be `'boarded'` with `consumed_at IS NULL` at a time — that is the "active" pairing §14.6 resolves at offboard time.
+
+### 14.5 Manual onboard (exception) — built
+
+A deliberately secondary, low-prominence entry point (not a peer tab) for boarding someone entirely outside the Manifest → RFM flow (e.g. an ad hoc supply-boat ride). Requires a **mandatory** reason (always, no exceptions). Optionally asks "Is this person relieving someone currently offshore?" — if yes, creates a `replacement_pairings` row directly at `'boarded'` (`manifest_request_item_id = null`, `relief_deadline = sign_on_date + relief_grace_period_days`). Sets `is_manual_exception = true` and `manual_exception_reason` on the resulting `rotation_log` row.
+
+### 14.6 Offboard-time logic: understay + two-segment overstay attribution (NOT YET BUILT — Workstream B)
+
+Extend the existing Offboard action. After computing final `days_served` for the closing stint, run two independent checks:
+
+**Understay check.** If `days_served < min_service_days`: look up the most recent `manifest_request_item` where `replacing_employee_id` = this employee and `is_emergency_exception = true`; pre-fill the reason from its `exception_reason` if found (editable). Show a mandatory modal: reason required if not pre-filled. On confirm, insert an `understay_records` row: `days_short = min_service_days − days_served`, `fixed_cost`/`daily_rate` snapshotted from `app_config`, `total_cost` computed. Always label this cost as based on **placeholder, unconfirmed rates** in any UI until the real rates are entered in Configuration. This is tracked and absorbed by SKFS — no ONGC reconciliation flow for understay.
+
+**Overstay attribution.** If `days_served > max_service_days`: find the active pairing (`status='boarded'`, `outgoing_employee_id` = this employee, `consumed_at IS NULL`). Using the existing inclusive day-counting helpers, compute:
+- `hard_threshold_date` — the calendar date on which `days_served` would equal `max_service_days`.
+- `relief_arrival_date` — the pairing's boarding sortie_date, if a pairing exists.
+- `segment_1_days = max(0, relief_arrival_date − hard_threshold_date)` if a pairing exists, else the **entire** overstay (`sign_off_date − hard_threshold_date`) if no pairing was ever boarded for this stint at all.
+- `segment_2_days = max(0, sign_off_date − max(relief_arrival_date, hard_threshold_date))` if a pairing exists, else 0.
+
+**Default attributions (always overridable, override requires a mandatory remark):**
+- No pairing exists at all → `segment_1_attribution` defaults to **SKFS** (no relief was ever in motion).
+- A pairing exists → walk `retry_of_pairing_id` backward to the most recent prior **failed** attempt for this outgoing employee:
+  - prior attempt was `'dropped'` → `segment_1_attribution` defaults to **ONGC**.
+  - prior attempt was `'no_show'` → `segment_1_attribution` defaults to **SKFS**.
+  - no prior failed attempt at all (succeeded first try, just late) → fall back to whether the **original/earliest** request in the retry chain was filed within the safe day-56–65 window: filed within → **ONGC** default; filed after day 65 → **SKFS** default.
+- `segment_2_attribution`, whenever `segment_2_days > 0`, **always** defaults to **ONGC** (the relief already arrived — any further delay is a return-transport problem).
+
+Show both segments with their computed days and defaults in a review modal before completing the offboard, each independently changeable. On confirm: insert the `overstay_attributions` row, and set the pairing's `consumed_at = now()` if one existed. This is purely an attribution split layered on top of the existing, unchanged base penalty computation (§3.2) — it does not change how the underlying penalty amount is calculated, only how it's attributed.
+
+### 14.7 Dashboard alerts (NOT YET BUILT — Workstream D)
+
+Three distinct alerts, each genuinely different in cause and required follow-up:
+
+1. **"Awaiting re-manifest"** (base-side) — most recent `rfm_line_items.outcome` is `dropped` or `no_show` with no boarding since. Shown split by reason (dropped → chase ONGC for a seat; no-show → chase the employee / reconsider reliability), colour-escalating with days waiting (0–2 neutral, 3–5 amber, 6+ red). Quick actions: "Create new manifest request" or "Mark as left".
+2. **"Relief failed to arrive"** (offshore-side) — currently offshore, past `max_service_days`, whose most recent pairing attempt resolved `dropped`/`no_show` with no successor yet boarded. Tells the manager *why* a specific overdue case hasn't resolved, not just that it's overdue.
+3. **"Manifest needed soon"** — past `warning_day` with **no** `manifest_request_item` ever filed naming them at all. The single most actionable alert, since it's the last point where action prevents the problem rather than explains it later.
+
+### 14.8 Reports hub (NOT YET BUILT — Workstream E)
+
+New "Reports" entry in the hamburger drawer (alongside Employee Master, Configuration), built as an extensible list of report cards.
+
+- **Reconciliation Report** — filterable by date range / installation / reconciliation status. One row per overstay stint in a downloadable `.xlsx`: employee, designation, installation, dates, days served/over, both segments' days and attribution, total/ONGC-attributable/SKFS-attributable penalty amounts, linked RFM number(s), and a generated plain-language narrative ("Replacement requested on [date]... ONGC RFM #[number] issued... Outcome: [Dropped/Boarded/No RFM received]..."). This is the multi-case version for periodic ONGC submissions.
+- **DOB Mismatch Report** (§14.9 below feeds this) — `.xlsx`: emp_id, full_name, designation, installation/status, Aadhaar DOB, PAN DOB, Passport DOB.
+- A **"View evidence" button** on each individual Penalty tracker stint (and reachable from the Reconcile modal) is the single-case, in-app version of the same underlying data.
+
+### 14.9 Remaining build order (Workstreams C–H, not yet built)
+
+- **C — Bulk confirm on Roster → Base staff tab** (select-mode multi-select + sticky "Confirm Availability (N)" action, distinct from the existing single quick-confirm button).
+- **D — Dashboard alerts** (§14.7).
+- **E — Reports hub** (§14.8).
+- **F — Guesthouse vs. hometown base staff** — `base_location_type` + `recall_lead_time_days` (already in schema, §14.1), shown as a tag on Roster/Employee Master cards, used as a ranking tiebreaker in `reserve.js` (guesthouse outranks hometown within the same confirmation tier).
+- **G — Passport number field** — make the document checklist render a document's number field whenever `tracks_number` is true and its date fields whenever `tracks_dates` is true, independently (so Passport shows both). Expose `tracks_number` as an editable Configuration toggle.
+- **H — DOB mismatch detection (soft flag)** — capture a `date_of_birth` per Aadhaar/PAN/Passport document. If an employee's recorded DOBs across these (where at least two are recorded) disagree, flag a separate, distinct "⚠️ DOB mismatch" badge (never merged into the cert-current badge, never blocks any action) showing the conflicting dates on tap. Add `dob_mismatch` as a read-only Employee Master export column. Feeds the DOB Mismatch Report in §14.8.
+
+Build B before C–H, since B is what actually consumes the pairing data A produces — verifying B end-to-end (across all three pairing-creation paths: formal request, ad-hoc RFM line, and manual exception) is the highest-value next test.
 
 ---
 
-## 6. Key logic specs
+## 15. Open / unresolved items
 
-### 6.1 "Currently offshore" / "on base"
-- Offshore = has a `rotation_log` row with `sign_off_date IS NULL`. `current_installation_id` mirrors this for fast lookup.
-- On base = `employment_status = 'active'` and no open rotation_log row.
-
-### 6.2 Roster colour states (from `app_config`)
-- Days `< min_service_days` → neutral/green ("in service").
-- `>= min_service_days` and `< warning_day` → blue/teal ("eligible").
-- `>= warning_day` and `< max_service_days` → amber ("warning").
-- `>= max_service_days` → red ("over threshold — penalty risk").
-
-### 6.3 Eligibility (for reserve pool)
-- `employment_status = 'active'`, not currently offshore, and rested. Compute rest days as `today − (most recent rotation_log.sign_off_date for that employee)`. If never offshore, treat as eligible. (Optional configurable minimum rest — leave a hook, default 0.)
-
-### 6.4 Cert-current check
-- A document_type applies to an employee if `applies_to_all = true` OR there is a `document_type_designations` row linking it to the employee's designation.
-- For every applying, required document_type, the employee must have an `employee_documents` row with `status = 'verified'` and (if `expiry_date` is set) `expiry_date >= today`.
-- Any missing or expired required document → not cert-current. Always surface *which* document is the problem (e.g. "HUET expired", "ITI Certificate missing") so the manager knows what to chase.
-
-### 6.5 Replacement matching query
-Given a target person on installation X with designation D and an expected rotation date:
-- Candidates = base employees with designation D, passing eligibility (§6.3) and cert-current (§6.4).
-- Rank: confirmed-and-unexpired first, then cert-current + eligible, then by fewest calls / most recent useful outcome. De-emphasise `last_call_outcome = 'no_answer'` with high `call_count`.
-
-### 6.6 Confirmation lifecycle
-- Calling sets/updates `availability` (increment `call_count`, set `last_call_at`, `last_call_outcome`) and inserts a `call_log` row.
-- Outcome `confirmed` → set `confirmed = true`, `confirmed_at = now()`, `expires_at = now() + confirmation_validity_days`, `confirmed_for_date` if known.
-- A confirmation is "live" only if `confirmed = true AND expires_at >= now()`. Expired confirmations drop out of the reserve pool and the person re-surfaces for a fresh call.
-
-### 6.7 Penalty computation & reconciliation
-- A `penalty_log` row should exist for any stint where `days_served > max_service_days`. Create it the first time a stint crosses the threshold (one row per `rotation_log` via the unique FK), then keep `days_over` and `total_penalty` refreshed: `days_over = days_served − max_service_days` (floor 0), `total_penalty = days_over × daily_penalty_rate`. While the person is offshore this keeps growing; at sign-off it finalises (use `sign_off_date − sign_on_date − max_service_days`).
-- Computation can run client-side when the Penalty tracker loads, or via a scheduled refresh — either is fine at this scale; do not require a background worker.
-- **Reconcile action:** sets `status = 'reconciled'`, `reconciled_by`, `reconciled_at`, and `reconciliation_remark` (reject the action if the remark is empty). Reconciled rows leave the active exposure total but stay in history. Penalties are never deleted, only reconciled.
+- **BLQ-1 / BLQ-2 naming.** The ops team's chopper-field list named "BLQ1, BLQ2" while the seeded installation list has only "BLQ-I". Unconfirmed whether BLQ-2 is a real, not-yet-added installation or a naming variant. Resolve before assuming BLQ-2 exists anywhere in the system.
+- **Field grouping** (Tapti/B&S/South/North/NH) — parked, not built. A lightweight optional `field` label on installations could be added later purely for analytics/filtering; no logic should depend on it yet.
+- **No-show confirmation snapshot** — reversing a no-show correction does not restore the employee's prior `confirmed` value (it stays `false`); accepted as a minor, low-cost gap rather than adding a snapshot column.
 
 ---
 
-## 7. Build sequence (paste these into Claude Code in order)
-
-Put this spec in the project root first. Then:
-
-1. *"Read SPEC.md fully. Scaffold a Vite + React mobile-first PWA wired to Supabase, with a Vercel-ready config. Set up the Supabase client, env vars, and a basic authenticated shell with a bottom nav for the 8 modules in §5. Don't build module internals yet."*
-2. *"Generate the full Supabase migration from §4, plus the seed data described at the end of §4. Give me a seed file with clearly-marked placeholders for the real installation names and designations."*
-3. *"Build Supabase email auth and the app_users table linkage. 10 trusted users; RLS = any authenticated user can read/write all tables for now."*
-4. *"Build the Employee management module per §5.2 and §6.4, including the configurable document checklist."*
-5. *"Build the Boarding flow per §5.4 and §6.1, including batch onboard/offboard."*
-6. *"Build the Active roster per §5.3 and the colour states in §6.2."*
-7. *"Build the Replacement finder (§5.5, §6.5) and Reserve pool (§5.6, §3.4, §6.3, §6.6). Match the agreed mockup: target person on top, ranked same-designation candidates below with rest days, cert status, call count, and confirm/call actions."*
-8. *"Build the Penalty tracker per §5.7 and §6.7 — auto-listed penalties from day count, with unreconciled vs reconciled views and a reconcile action that requires a remark."*
-9. *"Build the Configuration module per §5.8 — thresholds, installations, designations, document types (incl. designation-specific), and installation requirements."*
-10. *"Build the Dashboard per §5.1."*
-11. *"Make it an installable PWA and deploy to Vercel. Walk me through connecting Supabase env vars in Vercel."*
-
-Iterate within each step before moving on — test on a phone-sized viewport as you go.
-
----
-
-## 8. Prerequisites (one-time setup before step 1)
-
-- Node.js (LTS) installed.
-- A free Supabase project created (note the project URL and anon key).
-- A free Vercel account.
-- Claude Code installed and authenticated (Max plan).
-
----
-
-## 9. Deferred / phase-2 (note, don't build now)
+## 16. Deferred / future phases (replaces original §9)
 
 - Wage rates per category/designation and cost reporting.
-- Per-installation manager scoping (tighten RLS so a site manager sees only their installation).
-- Gap-variance / punctuality analytics off `rotation_log` (on-time vs late rotation history).
-- Push/SMS alerts (the app shows in-app alerts in v1).
-- Additional or "any-of group" document requirements (the OR documents are a single row in v1 — see §4 notes).
-- Fuller penalty model: capture whether ONGC actually arranged transport and the employee didn't board, so the penalty reflects the real contractual trigger rather than day count alone. In v1 this nuance lives in the reconciliation remark; phase 2 can make it a structured field on `penalty_log`.
+- Per-installation manager scoping (RLS tightened so a site manager sees only their installation).
+- Gap-variance / punctuality analytics off `rotation_log`.
+- Push/SMS alerts (in-app alerts only for now).
+- "Any-of group" document requirements (the OR documents remain a single combined row).
+- Structured field-grouping logic beyond the optional label noted in §15.
+- Anything not explicitly listed in §14.9 as pending.
