@@ -315,11 +315,13 @@ function LogRfmModal({
         <span>Link to manifest request (optional)</span>
         <select value={requestId} onChange={(e) => onPickRequest(e.target.value)}>
           <option value="">— none —</option>
-          {requests.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.installation?.name} · {r.request_date} ({r.items?.length ?? 0})
-            </option>
-          ))}
+          {requests
+            .filter((r) => r.status !== 'rejected')
+            .map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.installation?.name} · {r.request_date} ({r.items?.length ?? 0})
+              </option>
+            ))}
         </select>
       </label>
 
