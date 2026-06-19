@@ -26,10 +26,14 @@ export function daysBetween(startISO, endISO = todayISO()) {
   return Math.floor((end - start) / 86400000)
 }
 
-// Add days to an ISO date, returning ISO.
+// Add days to an ISO date, returning ISO. Operates purely in UTC: parsing as
+// local time but slicing toISOString() (UTC) rolls the date back a day in any
+// positive-offset zone like IST (local midnight is the previous day in UTC),
+// which shifted every addDays() result one day early. Staying in UTC end to
+// end makes this exact calendar arithmetic, independent of the run timezone.
 export function addDays(startISO, days) {
   if (!startISO) return ''
-  const d = new Date(startISO + 'T00:00:00')
-  d.setDate(d.getDate() + Number(days || 0))
+  const d = new Date(startISO + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + Number(days || 0))
   return d.toISOString().slice(0, 10)
 }
