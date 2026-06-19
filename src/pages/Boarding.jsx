@@ -60,6 +60,12 @@ function OffboardTab({ userId }) {
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  // Separate from `busy`: a resolve-modal save in flight. `busy` stays true for
+  // the whole offboard run (keeping the main action button disabled), but the
+  // modal must stay interactive while it waits for the manager's input — so its
+  // confirm button is driven by `saving`, which is only true during the actual
+  // DB write triggered by clicking Confirm.
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
   const [cfg, setCfg] = useState(null)
@@ -171,43 +177,46 @@ function OffboardTab({ userId }) {
     await processNext()
   }
 
+  // Abort the run after a mid-modal save failure: surface the error, drop the
+  // queue, and unstick both flags so the screen is usable again.
+  function failResolve(label, err) {
+    console.error(label, err)
+    setError(`${label} ${err.message}`)
+    queueRef.current = []
+    setSaving(false)
+    setBusy(false)
+    setResolve(null)
+  }
+
   async function confirmUnderstay(reason) {
     const { stint, daysServed } = resolve
+    setSaving(true)
+    setError('')
     const { error: offErr } = await batchOffboard([stint], signOffDate, userId)
-    if (offErr) {
-      setError(offErr.message)
-      setBusy(false)
-      setResolve(null)
-      return
-    }
+    if (offErr) return failResolve('Sign-off failed:', offErr)
+
     const { error: recErr } = await recordUnderstay(stint, { daysServed, reason, cfg, userId })
-    if (recErr) {
-      setError(recErr.message)
-      setBusy(false)
-      setResolve(null)
-      return
-    }
-    await consumeActivePairing(stint.employee?.id)
+    if (recErr) return failResolve('Signed off, but recording the understay failed:', recErr)
+
+    const { error: conErr } = await consumeActivePairing(stint.employee?.id)
+    if (conErr) return failResolve('Recorded, but clearing the relief pairing failed:', conErr)
+
+    setSaving(false)
     setResolve(null)
     await processNext()
   }
 
   async function confirmOverstay(attrs) {
     const { stint, over } = resolve
+    setSaving(true)
+    setError('')
     const { error: offErr } = await batchOffboard([stint], signOffDate, userId)
-    if (offErr) {
-      setError(offErr.message)
-      setBusy(false)
-      setResolve(null)
-      return
-    }
+    if (offErr) return failResolve('Sign-off failed:', offErr)
+
     const { error: recErr } = await recordOverstay(stint, over, { ...attrs, userId })
-    if (recErr) {
-      setError(recErr.message)
-      setBusy(false)
-      setResolve(null)
-      return
-    }
+    if (recErr) return failResolve('Signed off, but recording the attribution failed:', recErr)
+
+    setSaving(false)
     setResolve(null)
     await processNext()
   }
@@ -216,6 +225,7 @@ function OffboardTab({ userId }) {
     // Abort the rest of this offboard run; anything already done stays done.
     queueRef.current = []
     setResolve(null)
+    setSaving(false)
     setBusy(false)
     setSelected(new Set())
     load()
@@ -285,7 +295,7 @@ function OffboardTab({ userId }) {
         <OffboardResolveModal
           resolve={resolve}
           cfg={cfg}
-          busy={busy}
+          busy={saving}
           onUnderstayConfirm={confirmUnderstay}
           onOverstayConfirm={confirmOverstay}
           onCancel={cancelResolve}

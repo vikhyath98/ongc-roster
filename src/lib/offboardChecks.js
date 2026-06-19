@@ -188,10 +188,13 @@ export async function recordOverstay(
   if (error) return { error }
 
   if (result.pairingId) {
-    await supabase
+    // Previously the result of this update was discarded, so a failure here
+    // (e.g. RLS, FK) was swallowed and the caller saw success. Surface it.
+    const { error: consumeErr } = await supabase
       .from('replacement_pairings')
       .update({ consumed_at: new Date().toISOString() })
       .eq('id', result.pairingId)
+    if (consumeErr) return { error: consumeErr }
   }
   return { error: null }
 }
