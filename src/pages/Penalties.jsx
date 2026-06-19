@@ -6,6 +6,7 @@ import {
 } from '../lib/penalties'
 import { useAuth } from '../context/AuthContext'
 import Modal from '../components/Modal'
+import EvidenceModal from '../components/EvidenceModal'
 
 const inr = new Intl.NumberFormat('en-IN', {
   style: 'currency',
@@ -24,6 +25,10 @@ export default function Penalties() {
   const [reconcileFor, setReconcileFor] = useState(null)
   const [remark, setRemark] = useState('')
   const [busy, setBusy] = useState(false)
+  const [evidenceFor, setEvidenceFor] = useState(null)
+
+  const openEvidence = (rotationLogId, employeeName, installation) =>
+    setEvidenceFor({ rotationLogId, employeeName, installation })
 
   async function load() {
     setLoading(true)
@@ -122,17 +127,26 @@ export default function Penalties() {
                     </div>
                     <div className="penalty-card__side">
                       <span className="penalty-amount">{money(p.total_penalty)}</span>
-                      {p.finalised ? (
+                      <div className="penalty-card__actions">
                         <button
                           type="button"
                           className="btn btn--ghost btn--sm"
-                          onClick={() => openReconcile(p)}
+                          onClick={() => openEvidence(p.rotation_log_id, p.full_name, p.installation_name)}
                         >
-                          Reconcile
+                          View evidence
                         </button>
-                      ) : (
-                        <span className="penalty-blocked">Still offshore — offboard first</span>
-                      )}
+                        {p.finalised ? (
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--sm"
+                            onClick={() => openReconcile(p)}
+                          >
+                            Reconcile
+                          </button>
+                        ) : (
+                          <span className="penalty-blocked">Still offshore — offboard first</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </li>
@@ -168,6 +182,19 @@ export default function Penalties() {
                     <div className="penalty-card__side">
                       <span className="penalty-amount penalty-amount--done">{money(r.total_penalty)}</span>
                       <span className="pill pill--ok">Reconciled</span>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() =>
+                          openEvidence(
+                            r.rotation_log_id,
+                            r.employee?.full_name,
+                            r.installation?.name
+                          )
+                        }
+                      >
+                        View evidence
+                      </button>
                     </div>
                   </div>
                 </li>
@@ -208,6 +235,19 @@ export default function Penalties() {
               This moves it out of active exposure into history. It is never deleted. A remark
               stating it has been reconciled with ONGC is required.
             </p>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() =>
+                openEvidence(
+                  reconcileFor.rotation_log_id,
+                  reconcileFor.full_name,
+                  reconcileFor.installation_name
+                )
+              }
+            >
+              View evidence
+            </button>
             <label className="field">
               <span>Reconciliation remark *</span>
               <textarea
@@ -221,6 +261,14 @@ export default function Penalties() {
           </>
         )}
       </Modal>
+
+      <EvidenceModal
+        open={Boolean(evidenceFor)}
+        rotationLogId={evidenceFor?.rotationLogId}
+        employeeName={evidenceFor?.employeeName}
+        installation={evidenceFor?.installation}
+        onClose={() => setEvidenceFor(null)}
+      />
     </section>
   )
 }

@@ -1757,6 +1757,23 @@ code {
   height: 72px;
 }
 
+/* Reports — evidence modal + penalty-card action grouping (Workstream E). */
+.penalty-card__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.evidence-segs {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 /* Manifestation alert sub-group labels (Workstream D, §14.7). */
 .alert-subhead {
   margin: 12px 0 6px;
