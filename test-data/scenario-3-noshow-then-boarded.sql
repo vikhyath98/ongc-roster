@@ -31,25 +31,48 @@
 -- Independently runnable; cleans up its own TEST-S3-% rows first.
 -- =====================================================================
 
--- ---- cleanup any prior run (FK-safe order) -------------------------
-delete from rfm_line_items
-  where rfm_id in (select id from rfms where rfm_number like 'TEST-S3-%')
-     or employee_id in (select id from employees where emp_id like 'TEST-S3-%');
+-- ---- cleanup any prior run (correct FK dependency order) -----------
+-- 1. overstay_attributions -> rotation_log, replacement_pairings
 delete from overstay_attributions
   where rotation_log_id in (select id from rotation_log where employee_id in
         (select id from employees where emp_id like 'TEST-S3-%'));
+-- 2. understay_records -> rotation_log, employees
 delete from understay_records
+  where employee_id in (select id from employees where emp_id like 'TEST-S3-%');
+-- 3. clear rfm_line_items.rotation_log_id before rotation_log is deleted
+update rfm_line_items set rotation_log_id = null
   where rotation_log_id in (select id from rotation_log where employee_id in
         (select id from employees where emp_id like 'TEST-S3-%'));
-delete from penalty_log
-  where employee_id in (select id from employees where emp_id like 'TEST-S3-%');
+-- 4. rfm_line_items -> rfms, employees
+delete from rfm_line_items
+  where rfm_id in (select id from rfms where rfm_number like 'TEST-S3-%')
+     or employee_id in (select id from employees where emp_id like 'TEST-S3-%');
+-- 5. replacement_pairings -> employees (self-ref retry removed in one delete)
 delete from replacement_pairings
   where outgoing_employee_id in (select id from employees where emp_id like 'TEST-S3-%')
      or incoming_employee_id in (select id from employees where emp_id like 'TEST-S3-%');
+-- 6. rfms -> manifest_requests
+delete from rfms where rfm_number like 'TEST-S3-%';
+-- 7. manifest_request_items -> manifest_requests, employees
+delete from manifest_request_items
+  where employee_id in (select id from employees where emp_id like 'TEST-S3-%')
+     or replacing_employee_id in (select id from employees where emp_id like 'TEST-S3-%')
+     or manifest_request_id in (select id from manifest_requests where notes like 'TEST-S3-%');
+-- 8. manifest_requests
+delete from manifest_requests where notes like 'TEST-S3-%';
+-- 9. availability -> employees
+delete from availability
+  where employee_id in (select id from employees where emp_id like 'TEST-S3-%');
+-- 10. call_log -> employees
+delete from call_log
+  where employee_id in (select id from employees where emp_id like 'TEST-S3-%');
+-- 11. employee_documents -> employees
+delete from employee_documents
+  where employee_id in (select id from employees where emp_id like 'TEST-S3-%');
+-- 12. rotation_log -> employees
 delete from rotation_log
   where employee_id in (select id from employees where emp_id like 'TEST-S3-%');
-delete from manifest_requests where notes like 'TEST-S3-%';
-delete from rfms where rfm_number like 'TEST-S3-%';
+-- 13. employees
 delete from employees where emp_id like 'TEST-S3-%';
 
 -- ---- fresh seed ----------------------------------------------------
