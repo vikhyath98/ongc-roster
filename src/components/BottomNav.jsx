@@ -13,6 +13,7 @@ export const NAV_ITEMS = [
 // Secondary destinations, reached from the header hamburger menu.
 export const MENU_ITEMS = [
   { to: '/employees', label: 'Employee Master', icon: '👤' },
+  { to: '/reports', label: 'Reports', icon: '📊' },
   { to: '/configuration', label: 'Configuration', icon: '⚙️' },
 ]
 

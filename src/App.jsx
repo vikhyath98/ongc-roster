@@ -8,6 +8,7 @@ import Roster from './pages/Roster'
 import Boarding from './pages/Boarding'
 import Penalties from './pages/Penalties'
 import Configuration from './pages/Configuration'
+import Reports from './pages/Reports'
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="boarding" element={<Boarding />} />
         <Route path="penalties" element={<Penalties />} />
         <Route path="configuration" element={<Configuration />} />
+        <Route path="reports" element={<Reports />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
