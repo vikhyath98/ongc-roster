@@ -289,7 +289,7 @@ export default function Dashboard() {
         </div>
       </div>
       <div className="roster-card__actions">
-        <button type="button" className="btn btn--ghost btn--sm" onClick={() => navigate('/board')}>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => navigate('/boarding')}>
           New request
         </button>
         <button
@@ -423,7 +423,7 @@ export default function Dashboard() {
                       <button
                         type="button"
                         className="btn btn--ghost btn--sm roster-card__action"
-                        onClick={() => navigate('/board')}
+                        onClick={() => navigate('/boarding')}
                       >
                         ＋ Create manifest request
                       </button>
