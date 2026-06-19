@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { listEmployees } from '../lib/employees'
+import { Link, useNavigate } from 'react-router-dom'
+import { listEmployees, setEmploymentStatus } from '../lib/employees'
 import { listOffshoreStints } from '../lib/boarding'
 import { listPenaltyExposure, listReconciledPenalties } from '../lib/penalties'
 import { getAppConfig, configInt } from '../lib/config'
 import { loadCandidates } from '../lib/reserve'
+import { loadManifestAlerts } from '../lib/alerts'
 import { listInstallationRequirements } from '../lib/configAdmin'
 import { listInstallations, listDesignations } from '../lib/reference'
-import { daysInclusive } from '../lib/dates'
+import { daysInclusive, todayISO } from '../lib/dates'
 import { rotationState } from '../lib/rotation'
 import Modal from '../components/Modal'
 
@@ -28,6 +29,7 @@ const inr = new Intl.NumberFormat('en-IN', {
 })
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const [employees, setEmployees] = useState([])
   const [stints, setStints] = useState([])
   const [candidates, setCandidates] = useState([])
@@ -37,49 +39,89 @@ export default function Dashboard() {
   const [installations, setInstallations] = useState([])
   const [designations, setDesignations] = useState([])
   const [thresholds, setThresholds] = useState({ min: 56, warning: 65, max: 70 })
+  const [alerts, setAlerts] = useState(null)
+  const [alertBusy, setAlertBusy] = useState(false)
+  const [alertFlash, setAlertFlash] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [bandModal, setBandModal] = useState(null) // band key or null
 
-  useEffect(() => {
-    ;(async () => {
-      setLoading(true)
-      // Reuse the same queries the other modules use; run them in parallel.
-      const [empRes, stintRes, expRes, recRes, cfgRes, candRes, reqRes, instRes, desRes] =
-        await Promise.all([
-          listEmployees(),
-          listOffshoreStints(),
-          listPenaltyExposure(),
-          listReconciledPenalties(),
-          getAppConfig(),
-          loadCandidates(),
-          listInstallationRequirements(),
-          listInstallations({ activeOnly: true }),
-          listDesignations(),
-        ])
-      const err =
-        empRes.error || stintRes.error || expRes.error || recRes.error || cfgRes.error || candRes.error
-      if (err) {
-        setError(err.message)
-        setLoading(false)
-        return
-      }
-      setEmployees(empRes.data ?? [])
-      setStints(stintRes.data ?? [])
-      setCandidates(candRes.candidates ?? [])
-      setExposure(expRes.data ?? [])
-      setReconciled(recRes.data ?? [])
-      if (!reqRes.error) setRequirements(reqRes.data ?? [])
-      if (!instRes.error) setInstallations(instRes.data ?? [])
-      if (!desRes.error) setDesignations(desRes.data ?? [])
-      setThresholds({
-        min: configInt(cfgRes.config, 'min_service_days', 56),
-        warning: configInt(cfgRes.config, 'warning_day', 65),
-        max: configInt(cfgRes.config, 'max_service_days', 70),
-      })
+  async function load() {
+    setLoading(true)
+    // Reuse the same queries the other modules use; run them in parallel.
+    const [empRes, stintRes, expRes, recRes, cfgRes, candRes, reqRes, instRes, desRes] =
+      await Promise.all([
+        listEmployees(),
+        listOffshoreStints(),
+        listPenaltyExposure(),
+        listReconciledPenalties(),
+        getAppConfig(),
+        loadCandidates(),
+        listInstallationRequirements(),
+        listInstallations({ activeOnly: true }),
+        listDesignations(),
+      ])
+    const err =
+      empRes.error || stintRes.error || expRes.error || recRes.error || cfgRes.error || candRes.error
+    if (err) {
+      setError(err.message)
       setLoading(false)
-    })()
+      return
+    }
+    const emps = empRes.data ?? []
+    const sts = stintRes.data ?? []
+    const th = {
+      min: configInt(cfgRes.config, 'min_service_days', 56),
+      warning: configInt(cfgRes.config, 'warning_day', 65),
+      max: configInt(cfgRes.config, 'max_service_days', 70),
+    }
+    setEmployees(emps)
+    setStints(sts)
+    setCandidates(candRes.candidates ?? [])
+    setExposure(expRes.data ?? [])
+    setReconciled(recRes.data ?? [])
+    if (!reqRes.error) setRequirements(reqRes.data ?? [])
+    if (!instRes.error) setInstallations(instRes.data ?? [])
+    if (!desRes.error) setDesignations(desRes.data ?? [])
+    setThresholds(th)
+
+    // Manifestation alerts (§14.7) off the same data + a few manifest queries.
+    const decoratedLocal = sts.map((s) => {
+      const days = daysInclusive(s.sign_on_date)
+      return { ...s, days, state: rotationState(days, th) }
+    })
+    const al = await loadManifestAlerts({
+      employees: emps,
+      stints: decoratedLocal,
+      thresholds: th,
+      today: todayISO(),
+    })
+    if (!al.error) setAlerts(al)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    load()
   }, [])
+
+  async function markAsLeft(emp) {
+    if (
+      !window.confirm(
+        `Mark ${emp.full_name} as left? They'll be set inactive and drop out of the pool. You can reactivate them later in Employee Master.`
+      )
+    )
+      return
+    setAlertBusy(true)
+    setAlertFlash('')
+    const { error: e } = await setEmploymentStatus(emp.id, 'inactive')
+    setAlertBusy(false)
+    if (e) {
+      setError(e.message)
+      return
+    }
+    setAlertFlash(`${emp.full_name} marked as left.`)
+    load()
+  }
 
   // Headcount (§6.1 fast lookup via current_installation_id).
   const counts = useMemo(() => {
@@ -223,6 +265,69 @@ export default function Dashboard() {
   if (loading) return <p className="muted">Loading dashboard…</p>
   if (error) return <p className="banner banner--error">{error}</p>
 
+  const awaitingCount = alerts ? alerts.awaitingDropped.length + alerts.awaitingNoShow.length : 0
+  const totalAlerts = alerts
+    ? awaitingCount + alerts.reliefFailed.length + alerts.manifestNeeded.length
+    : 0
+
+  // One "Awaiting re-manifest" base-side row (relief that was dropped/no-showed).
+  const renderAwaiting = (r) => (
+    <div className="roster-card roster-card--col">
+      <div className="roster-card__row">
+        <div className="emp-card__main">
+          <span className="emp-card__name">{r.employee.full_name}</span>
+          <span className="emp-card__meta">
+            {r.employee.emp_id} · {r.employee.designation?.name ?? '—'}
+          </span>
+        </div>
+        <div className="roster-card__side">
+          <span
+            className={`pill ${r.severity === 'neutral' ? 'pill--muted' : `pill--${r.severity}`}`}
+          >
+            {r.daysWaiting}d waiting
+          </span>
+        </div>
+      </div>
+      <div className="roster-card__actions">
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => navigate('/board')}>
+          New request
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          disabled={alertBusy}
+          onClick={() => markAsLeft(r.employee)}
+        >
+          Mark as left
+        </button>
+      </div>
+    </div>
+  )
+
+  // One offshore alert row (relief-failed / manifest-needed), with an optional action.
+  const renderStintRow = (s, blockReason, action) => (
+    <div className={`roster-card roster-card--col ${s.state.cls}`}>
+      <div className="roster-card__row">
+        <div className="emp-card__main">
+          <span className="emp-card__name">{s.employee?.full_name ?? '—'}</span>
+          <span className="emp-card__meta">
+            {s.employee?.designation?.name ?? '—'} · 📍 {s.installation?.name ?? '—'}
+          </span>
+          <span className={'reserve-sub' + (blockReason.block ? ' reserve-sub--block' : '')}>
+            {blockReason.text}
+          </span>
+        </div>
+        <div className="roster-card__side">
+          <span className={`pill ${s.state.cls}`}>{s.state.label}</span>
+          <span className="roster-card__days">
+            <strong>{s.days}</strong>d
+          </span>
+        </div>
+      </div>
+      {action}
+    </div>
+  )
+
   return (
     <section className="dash">
       {/* Headcount */}
@@ -240,6 +345,96 @@ export default function Dashboard() {
           <span className="stat-card__label">Inactive</span>
         </Link>
       </div>
+
+      {/* Manifestation alerts (§14.7) */}
+      {alertFlash && <p className="banner banner--info">{alertFlash}</p>}
+
+      {totalAlerts > 0 && (
+        <>
+          {awaitingCount > 0 && (
+            <div className="dash-card">
+              <div className="dash-card__head">
+                <h3>⏳ Awaiting re-manifest</h3>
+                <span className="muted">{awaitingCount} on base</span>
+              </div>
+              {alerts.awaitingDropped.length > 0 && (
+                <>
+                  <p className="alert-subhead muted">Dropped — chase ONGC for a seat</p>
+                  <ul className="card-list">
+                    {alerts.awaitingDropped.map((r) => (
+                      <li key={r.employee.id}>{renderAwaiting(r)}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {alerts.awaitingNoShow.length > 0 && (
+                <>
+                  <p className="alert-subhead muted">
+                    No-show — chase the employee / reconsider reliability
+                  </p>
+                  <ul className="card-list">
+                    {alerts.awaitingNoShow.map((r) => (
+                      <li key={r.employee.id}>{renderAwaiting(r)}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+
+          {alerts.reliefFailed.length > 0 && (
+            <div className="dash-card">
+              <div className="dash-card__head">
+                <h3>🚁 Relief failed to arrive</h3>
+                <span className="muted">{alerts.reliefFailed.length} overdue</span>
+              </div>
+              <ul className="card-list">
+                {alerts.reliefFailed.map(({ stint: s, reason }) => (
+                  <li key={s.id}>
+                    {renderStintRow(
+                      s,
+                      {
+                        block: true,
+                        text:
+                          reason === 'dropped'
+                            ? 'Last relief was dropped by ONGC — no seat'
+                            : 'Last relief no-showed — did not board',
+                      },
+                      null
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {alerts.manifestNeeded.length > 0 && (
+            <div className="dash-card">
+              <div className="dash-card__head">
+                <h3>📋 Manifest needed soon</h3>
+                <span className="muted">{alerts.manifestNeeded.length} unrequested</span>
+              </div>
+              <ul className="card-list">
+                {alerts.manifestNeeded.map(({ stint: s }) => (
+                  <li key={s.id}>
+                    {renderStintRow(
+                      s,
+                      { block: false, text: 'No manifest request filed yet' },
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm roster-card__action"
+                        onClick={() => navigate('/board')}
+                      >
+                        ＋ Create manifest request
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Rotation window */}
       <div className="dash-card">
