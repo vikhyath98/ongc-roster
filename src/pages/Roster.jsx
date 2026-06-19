@@ -13,6 +13,7 @@ import { rotationState } from '../lib/rotation'
 import { useAuth } from '../context/AuthContext'
 import ReplaceSheet from '../components/ReplaceSheet'
 import CallDialog from '../components/CallDialog'
+import BulkConfirmAvailability from '../components/BulkConfirmAvailability'
 
 const OUTCOME_LABEL = {
   no_answer: 'No answer',
@@ -57,6 +58,11 @@ export default function Roster() {
   // Base-staff tab quick-confirm toast.
   const [baseFlash, setBaseFlash] = useState('')
   const [baseError, setBaseError] = useState('')
+  // Base-staff bulk-confirm select mode (Workstream C). Distinct from the
+  // per-card quick Confirm above: a multi-select + sticky action bar.
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedBase, setSelectedBase] = useState(new Set())
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -205,6 +211,30 @@ export default function Roster() {
     setTimeout(() => setBaseFlash(''), 2500)
   }
 
+  // ----- Base-staff bulk confirm (select mode) -----
+  const selectedBaseEmployees = useMemo(
+    () => baseStaff.filter((c) => selectedBase.has(c.id)),
+    [baseStaff, selectedBase]
+  )
+  const allShownSelected =
+    baseShown.length > 0 && baseShown.every((c) => selectedBase.has(c.id))
+
+  function toggleSelectMode() {
+    setSelectMode((on) => !on)
+    setSelectedBase(new Set())
+    setBaseFlash('')
+    setBaseError('')
+  }
+  function toggleBaseSelect(id) {
+    setSelectedBase((s) => {
+      const next = new Set(s)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  const selectAllBase = () => setSelectedBase(new Set(baseShown.map((c) => c.id)))
+  const clearBaseSelect = () => setSelectedBase(new Set())
+
   return (
     <section>
       <div className="seg">
@@ -347,9 +377,42 @@ export default function Roster() {
             </div>
           )}
 
-          <p className="list-count muted">
-            {baseFiltered ? `${baseShown.length} of ${baseStaff.length}` : baseStaff.length} on base
-          </p>
+          <div className="list-toolbar">
+            <p className="list-count muted">
+              {baseFiltered ? `${baseShown.length} of ${baseStaff.length}` : baseStaff.length} on base
+            </p>
+            {baseStaff.length > 0 && (
+              <button type="button" className="linkish" onClick={toggleSelectMode}>
+                {selectMode ? 'Cancel' : 'Select'}
+              </button>
+            )}
+          </div>
+
+          {selectMode && (
+            <div className="select-list__bar">
+              <span className="muted">
+                {selectedBase.size} selected · {baseShown.length} shown
+              </span>
+              <div className="select-list__bar-actions">
+                <button
+                  type="button"
+                  className="linkish"
+                  onClick={selectAllBase}
+                  disabled={baseShown.length === 0 || allShownSelected}
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className="linkish"
+                  onClick={clearBaseSelect}
+                  disabled={selectedBase.size === 0}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
 
           {baseStaff.length === 0 ? (
             <p className="muted empty-state">Everyone active is currently offshore.</p>
@@ -366,10 +429,25 @@ export default function Roster() {
                     <div
                       className={
                         'roster-card roster-card--col' +
-                        (status.key === 'eligible' ? ' state--teal' : '')
+                        (status.key === 'eligible' ? ' state--teal' : '') +
+                        (selectMode ? ' roster-card--selectable' : '') +
+                        (selectMode && selectedBase.has(c.id) ? ' is-selected' : '')
                       }
+                      onClick={selectMode ? () => toggleBaseSelect(c.id) : undefined}
+                      role={selectMode ? 'button' : undefined}
+                      aria-pressed={selectMode ? selectedBase.has(c.id) : undefined}
                     >
                       <div className="roster-card__row">
+                        {selectMode && (
+                          <input
+                            type="checkbox"
+                            className="roster-card__check"
+                            checked={selectedBase.has(c.id)}
+                            readOnly
+                            tabIndex={-1}
+                            aria-hidden="true"
+                          />
+                        )}
                         <div className="emp-card__main">
                           <span className="emp-card__name">{c.full_name}</span>
                           <span className="emp-card__meta">
@@ -401,32 +479,67 @@ export default function Roster() {
                           )}
                         </div>
                       </div>
-                      <div className="roster-card__actions">
-                        <button
-                          type="button"
-                          className="btn btn--ghost btn--sm"
-                          onClick={() => setCallFor(c)}
-                        >
-                          Call…
-                        </button>
-                        {!c.liveConfirmed && (
+                      {!selectMode && (
+                        <div className="roster-card__actions">
                           <button
                             type="button"
-                            className="btn btn--primary btn--sm"
-                            onClick={() => quickConfirm(c)}
+                            className="btn btn--ghost btn--sm"
+                            onClick={() => setCallFor(c)}
                           >
-                            Confirm
+                            Call…
                           </button>
-                        )}
-                      </div>
+                          {!c.liveConfirmed && (
+                            <button
+                              type="button"
+                              className="btn btn--primary btn--sm"
+                              onClick={() => quickConfirm(c)}
+                            >
+                              Confirm
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </li>
                 )
               })}
             </ul>
           )}
+
+          {selectMode && selectedBase.size > 0 && (
+            <>
+              <div className="board-actionbar-spacer" aria-hidden="true" />
+              <div className="board-actionbar">
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => setBulkConfirmOpen(true)}
+                >
+                  Confirm Availability ({selectedBase.size})
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
+
+      <BulkConfirmAvailability
+        open={bulkConfirmOpen}
+        employees={selectedBaseEmployees}
+        onDone={() => {
+          setBaseFlash(
+            `Confirmed availability for ${selectedBaseEmployees.length} employee${
+              selectedBaseEmployees.length === 1 ? '' : 's'
+            }.`
+          )
+          load()
+        }}
+        onClose={() => {
+          setBulkConfirmOpen(false)
+          setSelectMode(false)
+          setSelectedBase(new Set())
+        }}
+      />
 
       <ReplaceSheet
         open={Boolean(target)}

@@ -1752,6 +1752,38 @@ code {
   z-index: 15;
 }
 
+/* Keeps the last card clear of the fixed action bar (Roster select mode). */
+.board-actionbar-spacer {
+  height: 72px;
+}
+
+/* Base-staff select mode (Workstream C). */
+.list-toolbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.roster-card--selectable {
+  cursor: pointer;
+}
+
+.roster-card.is-selected {
+  outline: 2px solid var(--teal);
+  outline-offset: -2px;
+}
+
+.roster-card__check {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  accent-color: var(--teal);
+  pointer-events: none;
+}
+
 .board-actionbar .btn {
   width: 100%;
   max-width: 720px;
