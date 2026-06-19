@@ -1,4 +1,7 @@
 import { supabase } from './supabase'
+import { todayISO } from './dates'
+
+const loadXLSX = () => import('xlsx')
 
 // Reports data layer (SPEC.md §14.8, Workstream E). The evidence chain-walk is
 // shared by the in-app "View evidence" modal (single case) and the
@@ -136,4 +139,122 @@ export async function getEvidenceForStint(rotationLogId) {
       : { reconciled: false },
     narrative: buildNarrative(chain),
   }
+}
+
+// ---------------------------------------------------------------------
+// Reconciliation Report (multi-case, §14.8)
+// ---------------------------------------------------------------------
+
+// Signed-off (finalised=true) overstay stints from the penalty_exposure view,
+// filtered by sign-off date range, installation, and reconciliation status.
+// Returns the filtered rows + a reconciled-by-stint map for the report build.
+async function fetchFilteredExposure({ installationId, dateFrom, dateTo, status } = {}) {
+  let q = supabase.from('penalty_exposure').select('*').eq('finalised', true)
+  if (installationId) q = q.eq('installation_id', installationId)
+  if (dateFrom) q = q.gte('sign_off_date', dateFrom)
+  if (dateTo) q = q.lte('sign_off_date', dateTo)
+  const { data: rows, error } = await q.order('sign_off_date', { ascending: false })
+  if (error) return { error }
+
+  const { data: recs, error: recErr } = await supabase
+    .from('penalty_log')
+    .select('rotation_log_id,reconciliation_remark,reconciled_at')
+    .eq('status', 'reconciled')
+  if (recErr) return { error: recErr }
+  const recById = new Map((recs ?? []).map((r) => [r.rotation_log_id, r]))
+
+  let filtered = rows ?? []
+  if (status === 'reconciled') filtered = filtered.filter((r) => recById.has(r.rotation_log_id))
+  else if (status === 'unreconciled') filtered = filtered.filter((r) => !recById.has(r.rotation_log_id))
+
+  return { filtered, recById, error: null }
+}
+
+// Cheap preview count — exposure + status filter only, no per-row evidence walk.
+export async function getReconciliationCount(filters) {
+  const res = await fetchFilteredExposure(filters)
+  if (res.error) return { error: res.error }
+  return { count: res.filtered.length, error: null }
+}
+
+// Full report: one assembled row per signed-off overstay stint. ongc/skfs
+// penalties are derived from the attribution segments × the stint's
+// daily_penalty_rate; total_penalty is always taken from the view unchanged
+// (the parts may not sum for pre-attribution stints — that's expected).
+export async function getReconciliationReportData(filters) {
+  const res = await fetchFilteredExposure(filters)
+  if (res.error) return { error: res.error }
+
+  const out = []
+  for (const r of res.filtered) {
+    const ev = await getEvidenceForStint(r.rotation_log_id)
+    const a = ev?.attribution ?? null
+    const rate = Number(r.daily_penalty_rate || 0)
+
+    let ongcDays = 0
+    let skfsDays = 0
+    if (a) {
+      if (a.seg1Attr === 'ongc') ongcDays += a.seg1Days
+      else if (a.seg1Attr === 'skfs') skfsDays += a.seg1Days
+      if (a.seg2Attr === 'ongc') ongcDays += a.seg2Days
+      else if (a.seg2Attr === 'skfs') skfsDays += a.seg2Days
+    }
+
+    const rec = res.recById.get(r.rotation_log_id)
+    out.push({
+      full_name: r.full_name,
+      emp_id: r.emp_id,
+      designation_name: r.designation_name,
+      installation_name: r.installation_name,
+      sign_on_date: r.sign_on_date,
+      sign_off_date: r.sign_off_date,
+      days_served: r.days_served,
+      days_over: r.days_over,
+      seg1Days: a ? a.seg1Days : '',
+      seg1Attr: a?.seg1Attr ? ATTR_LABEL[a.seg1Attr] : '',
+      seg2Days: a ? a.seg2Days : '',
+      seg2Attr: a?.seg2Attr ? ATTR_LABEL[a.seg2Attr] : '',
+      ongcPenalty: a ? ongcDays * rate : '',
+      skfsPenalty: a ? skfsDays * rate : '',
+      totalPenalty: Number(r.total_penalty || 0),
+      rfmNumbers: ev?.rfmNumbers ?? [],
+      reconciled: Boolean(rec),
+      reconciliationRemark: rec?.reconciliation_remark ?? '',
+      narrative: ev?.narrative ?? '',
+    })
+  }
+  return { rows: out, error: null }
+}
+
+const RECON_HEADERS = [
+  'Employee Name', 'Emp ID', 'Designation', 'Installation',
+  'Sign-on Date', 'Sign-off Date', 'Days Served', 'Days Over',
+  'Seg 1 Days', 'Seg 1 Attribution', 'Seg 2 Days', 'Seg 2 Attribution',
+  'ONGC Penalty (₹)', 'SKFS Penalty (₹)', 'Total Penalty (₹)',
+  'RFM Number(s)', 'Reconciled', 'Reconciliation Remark', 'Narrative',
+]
+
+// Run the full report and download it as .xlsx (same SheetJS dynamic-import
+// pattern as importEmployees.js). Returns { count } so the UI can confirm.
+export async function downloadReconciliationXlsx(filters) {
+  const res = await getReconciliationReportData(filters)
+  if (res.error) return { error: res.error }
+
+  const XLSX = await loadXLSX()
+  const aoa = [RECON_HEADERS]
+  for (const r of res.rows) {
+    aoa.push([
+      r.full_name, r.emp_id, r.designation_name, r.installation_name,
+      r.sign_on_date, r.sign_off_date, r.days_served, r.days_over,
+      r.seg1Days, r.seg1Attr, r.seg2Days, r.seg2Attr,
+      r.ongcPenalty, r.skfsPenalty, r.totalPenalty,
+      r.rfmNumbers.join(', '), r.reconciled ? 'Yes' : 'No',
+      r.reconciliationRemark, r.narrative,
+    ])
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Reconciliation')
+  XLSX.writeFile(wb, `reconciliation_report_${todayISO()}.xlsx`)
+  return { count: res.rows.length, error: null }
 }

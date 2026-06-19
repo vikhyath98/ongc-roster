@@ -1774,6 +1774,14 @@ code {
   gap: 6px;
 }
 
+.reports-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
 /* Manifestation alert sub-group labels (Workstream D, §14.7). */
 .alert-subhead {
   margin: 12px 0 6px;
