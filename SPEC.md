@@ -2,7 +2,7 @@
 
 > This document is the source of truth for the build. Place it in the project root as `SPEC.md`, replacing any earlier version. Claude Code should read it fully before building, and re-read relevant sections before each module. Where this spec and a later instruction conflict, ask before proceeding.
 >
-> **Document status, so a fresh session orients instantly:** Sections 1–9 describe the original v1 build (11 steps) — fully built, tested, deployed, and live at `https://skfs-ongc-roster.vercel.app`. Sections 10–13 describe the post-v1 refinement pass (navigation restructure, Employee Master, real seed data) — fully built and pushed. Section 14 describes the manifestation/RFM/pairing/attribution system: **Workstream A is built, tested, and pushed to `origin/main`. Workstreams B through H are fully designed below but not yet built** — that is the next work to do, in the order listed in §14.9. Section 15 lists genuinely open/unresolved items. Section 16 is the updated deferred list.
+> **Document status, so a fresh session orients instantly:** Sections 1–9 describe the original v1 build (11 steps) — fully built, tested, deployed, and live at `https://skfs-ongc-roster.vercel.app`. Sections 10–13 describe the post-v1 refinement pass (navigation restructure, Employee Master, real seed data) — fully built and pushed. Section 14 describes the manifestation/RFM/pairing/attribution system: **Workstreams A, B, and C are built and pushed to `origin/main`. Workstream D is built but pending test and push. Workstreams E through H are fully designed below but not yet built** — that is the remaining work, in the order listed in §14.9. Section 15 lists genuinely open/unresolved items. Section 16 is the updated deferred list.
 
 ---
 
@@ -382,16 +382,18 @@ New "Reports" entry in the hamburger drawer (alongside Employee Master, Configur
 - **DOB Mismatch Report** (§14.9 below feeds this) — `.xlsx`: emp_id, full_name, designation, installation/status, Aadhaar DOB, PAN DOB, Passport DOB.
 - A **"View evidence" button** on each individual Penalty tracker stint (and reachable from the Reconcile modal) is the single-case, in-app version of the same underlying data.
 
-### 14.9 Remaining build order (Workstreams C–H, not yet built)
+### 14.9 Remaining build order (Workstreams C–H)
 
-- **C — Bulk confirm on Roster → Base staff tab** (select-mode multi-select + sticky "Confirm Availability (N)" action, distinct from the existing single quick-confirm button).
-- **D — Dashboard alerts** (§14.7).
-- **E — Reports hub** (§14.8).
+- **C — Bulk confirm on Roster → Base staff tab** (select-mode multi-select + sticky "Confirm Availability (N)" action, distinct from the existing single quick-confirm button). **BUILT AND PUSHED** (commit `69eeece`).
+- **D — Dashboard alerts** (§14.7). **BUILT, NOT YET TESTED OR PUSHED** (commit `f2253b4`). Two open decisions to confirm during testing:
+  1. **"Mark as left"** sets `employment_status = inactive` (the standard reversible soft-delete) — confirm this is the intended behaviour.
+  2. **"Create manifest request"** navigates to Board → Manifest tab **without** pre-filling the named employee — pre-fill can be added after testing if wanted.
+- **E — Reports hub** (§14.8). **Not yet built** — next up.
 - **F — Guesthouse vs. hometown base staff** — `base_location_type` + `recall_lead_time_days` (already in schema, §14.1), shown as a tag on Roster/Employee Master cards, used as a ranking tiebreaker in `reserve.js` (guesthouse outranks hometown within the same confirmation tier).
 - **G — Passport number field** — make the document checklist render a document's number field whenever `tracks_number` is true and its date fields whenever `tracks_dates` is true, independently (so Passport shows both). Expose `tracks_number` as an editable Configuration toggle.
 - **H — DOB mismatch detection (soft flag)** — capture a `date_of_birth` per Aadhaar/PAN/Passport document. If an employee's recorded DOBs across these (where at least two are recorded) disagree, flag a separate, distinct "⚠️ DOB mismatch" badge (never merged into the cert-current badge, never blocks any action) showing the conflicting dates on tap. Add `dob_mismatch` as a read-only Employee Master export column. Feeds the DOB Mismatch Report in §14.8.
 
-Build B before C–H, since B is what actually consumes the pairing data A produces — verifying B end-to-end (across all three pairing-creation paths: formal request, ad-hoc RFM line, and manual exception) is the highest-value next test.
+B was built before C–H because it consumes the pairing data A produces, and was verified end-to-end across all three pairing-creation paths (formal request, ad-hoc RFM line, and manual exception). With A–C pushed and D awaiting test/push, the remaining order is E → F → G → H.
 
 ---
 
