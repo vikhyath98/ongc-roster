@@ -9,7 +9,7 @@ export async function listDocumentTypes() {
   return supabase
     .from('document_types')
     .select(
-      'id,name,is_required,applies_to_all,default_validity_days,tracks_dates,' +
+      'id,name,is_required,applies_to_all,default_validity_days,tracks_dates,tracks_number,' +
         'document_type_designations(designation_id)'
     )
     .order('applies_to_all', { ascending: false })

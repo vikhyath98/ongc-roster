@@ -104,7 +104,7 @@ export async function deleteDesignation(id) {
 
 // ----- document types + the many-to-many designation mapping -----
 const DOC_SELECT =
-  'id,name,is_required,applies_to_all,default_validity_days,tracks_dates,' +
+  'id,name,is_required,applies_to_all,default_validity_days,tracks_dates,tracks_number,' +
   'document_type_designations(designation_id)'
 
 export async function createDocumentType(fields) {
@@ -160,6 +160,7 @@ function normaliseDocType(f) {
       ? null
       : Number(f.default_validity_days)
   if (f.tracks_dates !== undefined) row.tracks_dates = f.tracks_dates
+  if (f.tracks_number !== undefined) row.tracks_number = f.tracks_number
   return row
 }
 

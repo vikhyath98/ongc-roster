@@ -29,6 +29,7 @@ export default function DocumentTypesConfig() {
   const [isRequired, setIsRequired] = useState(true)
   const [appliesToAll, setAppliesToAll] = useState(true)
   const [tracksDates, setTracksDates] = useState(true)
+  const [tracksNumber, setTracksNumber] = useState(false)
   const [validity, setValidity] = useState('')
   const [desigIds, setDesigIds] = useState(new Set())
 
@@ -61,6 +62,7 @@ export default function DocumentTypesConfig() {
     setIsRequired(true)
     setAppliesToAll(true)
     setTracksDates(true)
+    setTracksNumber(false)
     setValidity('')
     setDesigIds(new Set())
     setFormError('')
@@ -72,6 +74,7 @@ export default function DocumentTypesConfig() {
     setIsRequired(dt.is_required)
     setAppliesToAll(dt.applies_to_all)
     setTracksDates(dt.tracks_dates !== false)
+    setTracksNumber(dt.tracks_number === true)
     setValidity(dt.default_validity_days ?? '')
     setDesigIds(new Set((dt.document_type_designations ?? []).map((m) => m.designation_id)))
     setFormError('')
@@ -102,6 +105,7 @@ export default function DocumentTypesConfig() {
       is_required: isRequired,
       applies_to_all: appliesToAll,
       tracks_dates: tracksDates,
+      tracks_number: tracksNumber,
       default_validity_days: validity === '' ? null : Number(validity),
     }
     const { data, error: err } = editing
@@ -242,6 +246,15 @@ export default function DocumentTypesConfig() {
               />
             </label>
           )}
+
+          <label className="checkrow">
+            <input
+              type="checkbox"
+              checked={tracksNumber}
+              onChange={(e) => setTracksNumber(e.target.checked)}
+            />
+            <span>Tracks a document number (e.g. Aadhaar, PAN, Passport)</span>
+          </label>
 
           <label className="checkrow">
             <input
