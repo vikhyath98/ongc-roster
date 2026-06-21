@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { listInstallations } from '../lib/reference'
-import { getReconciliationCount, downloadReconciliationXlsx } from '../lib/reports'
+import {
+  getReconciliationCount,
+  downloadReconciliationXlsx,
+  getDobMismatchData,
+  downloadDobMismatchXlsx,
+} from '../lib/reports'
 import { todayISO, addDays } from '../lib/dates'
 
 // Reports hub (SPEC.md §14.8, Workstream E). Extensible list of report cards;
@@ -18,6 +23,12 @@ export default function Reports() {
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
   const [flash, setFlash] = useState('')
+
+  // DOB Mismatch Report
+  const [dobCount, setDobCount] = useState(null)
+  const [dobDownloading, setDobDownloading] = useState(false)
+  const [dobError, setDobError] = useState('')
+  const [dobFlash, setDobFlash] = useState('')
 
   const filters = () => ({
     installationId: installationId || undefined,
@@ -46,8 +57,25 @@ export default function Reports() {
       if (!r.error) setInstallations(r.data ?? [])
     })
     refreshCount()
+    getDobMismatchData().then((res) => {
+      if (res.error) setDobError(res.error.message)
+      else setDobCount(res.rows.length)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  async function downloadDob() {
+    setDobDownloading(true)
+    setDobError('')
+    setDobFlash('')
+    const res = await downloadDobMismatchXlsx()
+    setDobDownloading(false)
+    if (res.error) {
+      setDobError(res.error.message)
+      return
+    }
+    setDobFlash(`Downloaded ${res.count} employee${res.count === 1 ? '' : 's'}.`)
+  }
 
   async function download() {
     setDownloading(true)
@@ -130,6 +158,38 @@ export default function Reports() {
 
         {error && <p className="banner banner--error">{error}</p>}
         {flash && <p className="banner banner--info">{flash}</p>}
+      </div>
+
+      <div className="dash-card">
+        <div className="dash-card__head">
+          <h3>DOB Mismatch Report</h3>
+        </div>
+        <p className="muted">
+          Employees whose date of birth differs across their Aadhaar, PAN and Passport records —
+          a data-quality check (includes inactive staff).
+        </p>
+
+        {dobError && <p className="banner banner--error">{dobError}</p>}
+        {dobCount === 0 ? (
+          <p className="readiness-health readiness-health--ok">No DOB mismatches detected</p>
+        ) : (
+          <div className="reports-actions">
+            <span className="muted">
+              {dobCount == null
+                ? 'Checking…'
+                : `${dobCount} employee${dobCount === 1 ? '' : 's'} with a mismatch`}
+            </span>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={downloadDob}
+              disabled={dobDownloading || !dobCount}
+            >
+              {dobDownloading ? 'Preparing…' : 'Download .xlsx'}
+            </button>
+          </div>
+        )}
+        {dobFlash && <p className="banner banner--info">{dobFlash}</p>}
       </div>
     </section>
   )

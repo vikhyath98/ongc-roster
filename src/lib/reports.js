@@ -1,5 +1,7 @@
 import { supabase } from './supabase'
 import { todayISO } from './dates'
+import { listEmployees } from './employees'
+import { listAllEmployeeDocuments, listDocumentTypes, dobMismatch } from './documents'
 
 const loadXLSX = () => import('xlsx')
 
@@ -256,5 +258,80 @@ export async function downloadReconciliationXlsx(filters) {
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Reconciliation')
   XLSX.writeFile(wb, `reconciliation_report_${todayISO()}.xlsx`)
+  return { count: res.rows.length, error: null }
+}
+
+// ---------------------------------------------------------------------
+// DOB Mismatch Report (§14.8 / §14.9 H)
+// ---------------------------------------------------------------------
+
+// Employees (active AND inactive — it's a data-quality issue independent of
+// status) whose identity-document DOBs disagree, with the three named docs'
+// DOBs looked up by their exact seeded names.
+export async function getDobMismatchData() {
+  const [empRes, docsRes, dtRes] = await Promise.all([
+    listEmployees(),
+    listAllEmployeeDocuments(),
+    listDocumentTypes(),
+  ])
+  const err = empRes.error || docsRes.error || dtRes.error
+  if (err) return { error: err }
+
+  const docTypes = dtRes.data ?? []
+  const idByName = new Map(docTypes.map((dt) => [dt.name, dt.id]))
+  const aadhaarId = idByName.get('Aadhaar Card')
+  const panId = idByName.get('PAN Card')
+  const passportId = idByName.get('Passport')
+
+  const docsByEmp = new Map()
+  for (const d of docsRes.data ?? []) {
+    if (!docsByEmp.has(d.employee_id)) docsByEmp.set(d.employee_id, [])
+    docsByEmp.get(d.employee_id).push(d)
+  }
+
+  const rows = []
+  for (const e of empRes.data ?? []) {
+    const empDocs = docsByEmp.get(e.id) ?? []
+    if (!dobMismatch(empDocs, docTypes).mismatch) continue
+    const dobOf = (typeId) =>
+      typeId ? empDocs.find((d) => d.document_type_id === typeId)?.date_of_birth ?? '' : ''
+    rows.push({
+      emp_id: e.emp_id,
+      full_name: e.full_name,
+      designation_name: e.designation?.name ?? '',
+      locationStatus: e.current_installation_id
+        ? e.installation?.name ?? 'Offshore'
+        : e.employment_status === 'inactive'
+          ? 'Inactive'
+          : 'On base',
+      aadhaarDob: dobOf(aadhaarId),
+      panDob: dobOf(panId),
+      passportDob: dobOf(passportId),
+    })
+  }
+  return { rows, error: null }
+}
+
+const DOB_HEADERS = [
+  'Emp ID', 'Full Name', 'Designation', 'Installation / Status',
+  'Aadhaar DOB', 'PAN DOB', 'Passport DOB',
+]
+
+export async function downloadDobMismatchXlsx() {
+  const res = await getDobMismatchData()
+  if (res.error) return { error: res.error }
+
+  const XLSX = await loadXLSX()
+  const aoa = [DOB_HEADERS]
+  for (const r of res.rows) {
+    aoa.push([
+      r.emp_id, r.full_name, r.designation_name, r.locationStatus,
+      r.aadhaarDob, r.panDob, r.passportDob,
+    ])
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'DOB Mismatch')
+  XLSX.writeFile(wb, `dob_mismatch_report_${todayISO()}.xlsx`)
   return { count: res.rows.length, error: null }
 }
