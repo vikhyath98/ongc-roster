@@ -20,7 +20,7 @@ export async function listEmployeeDocuments(employeeId) {
   return supabase
     .from('employee_documents')
     .select(
-      'id,employee_id,document_type_id,status,issue_date,expiry_date,document_number,verified_by,verified_at'
+      'id,employee_id,document_type_id,status,issue_date,expiry_date,document_number,date_of_birth,verified_by,verified_at'
     )
     .eq('employee_id', employeeId)
 }
@@ -29,7 +29,7 @@ export async function listEmployeeDocuments(employeeId) {
 export async function listAllEmployeeDocuments() {
   return supabase
     .from('employee_documents')
-    .select('employee_id,document_type_id,status,expiry_date')
+    .select('employee_id,document_type_id,status,expiry_date,date_of_birth')
 }
 
 // Upsert one checklist row. When marking verified, stamp verified_by/at;
@@ -43,6 +43,7 @@ export async function upsertEmployeeDocument(employeeId, documentTypeId, fields,
     issue_date: fields.issue_date || null,
     expiry_date: fields.expiry_date || null,
     document_number: fields.document_number?.trim() || null,
+    date_of_birth: fields.date_of_birth || null,
     verified_by: verified ? userId ?? null : null,
     verified_at: verified ? new Date().toISOString() : null,
   }

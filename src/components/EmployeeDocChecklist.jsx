@@ -15,7 +15,7 @@ const STATE_PILL = {
 }
 
 function blankEdit() {
-  return { status: 'pending', issue_date: '', expiry_date: '', document_number: '' }
+  return { status: 'pending', issue_date: '', expiry_date: '', document_number: '', date_of_birth: '' }
 }
 
 function editFromDoc(doc) {
@@ -25,6 +25,7 @@ function editFromDoc(doc) {
         issue_date: doc.issue_date ?? '',
         expiry_date: doc.expiry_date ?? '',
         document_number: doc.document_number ?? '',
+        date_of_birth: doc.date_of_birth ?? '',
       }
     : blankEdit()
 }
@@ -82,7 +83,8 @@ export default function EmployeeDocChecklist({ employee, docTypes, userId, onCha
       orig.status !== cur.status ||
       orig.issue_date !== cur.issue_date ||
       orig.expiry_date !== cur.expiry_date ||
-      orig.document_number !== cur.document_number
+      orig.document_number !== cur.document_number ||
+      orig.date_of_birth !== cur.date_of_birth
     )
   }
 
@@ -139,15 +141,26 @@ export default function EmployeeDocChecklist({ employee, docTypes, userId, onCha
               {/* Number and dates render independently: Passport tracks both,
                   Aadhaar/PAN track only a number, most docs only dates. */}
               {dt.tracks_number && (
-                <label className="field field--inline doc-card__number">
-                  <span>Document number (optional)</span>
-                  <input
-                    value={edit.document_number}
-                    onChange={(e) => setField(dt.id, 'document_number', e.target.value)}
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-                </label>
+                <>
+                  <label className="field field--inline doc-card__number">
+                    <span>Document number (optional)</span>
+                    <input
+                      value={edit.document_number}
+                      onChange={(e) => setField(dt.id, 'document_number', e.target.value)}
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                  </label>
+                  {/* Full-width own row so DOB isn't visually paired with Issue date. */}
+                  <label className="field field--inline" style={{ gridColumn: '1 / -1' }}>
+                    <span>Date of birth</span>
+                    <input
+                      type="date"
+                      value={edit.date_of_birth}
+                      onChange={(e) => setField(dt.id, 'date_of_birth', e.target.value)}
+                    />
+                  </label>
+                </>
               )}
               {dt.tracks_dates && (
                 <>
