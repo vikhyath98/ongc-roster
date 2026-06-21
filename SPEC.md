@@ -2,7 +2,7 @@
 
 > This document is the source of truth for the build. Place it in the project root as `SPEC.md`, replacing any earlier version. Claude Code should read it fully before building, and re-read relevant sections before each module. Where this spec and a later instruction conflict, ask before proceeding.
 >
-> **Document status, so a fresh session orients instantly:** Sections 1–9 describe the original v1 build (11 steps) — fully built, tested, deployed, and live at `https://skfs-ongc-roster.vercel.app`. Sections 10–13 describe the post-v1 refinement pass (navigation restructure, Employee Master, real seed data) — fully built and pushed. Section 14 describes the manifestation/RFM/pairing/attribution system: **Workstreams A, B, C, and D are built, tested, and pushed to `origin/main`. Workstreams E through H are fully designed below but not yet built** — that is the remaining work, in the order listed in §14.9. Section 15 lists genuinely open/unresolved items. Section 16 is the updated deferred list.
+> **Document status, so a fresh session orients instantly:** Sections 1–9 describe the original v1 build (11 steps) — fully built, tested, deployed, and live at `https://skfs-ongc-roster.vercel.app`. Sections 10–13 describe the post-v1 refinement pass (navigation restructure, Employee Master, real seed data) — fully built and pushed. Section 14 describes the manifestation/RFM/pairing/attribution system: **Workstreams A, B, C, D, and E are built, tested, and pushed to `origin/main`. Workstreams F through H are fully designed below but not yet built** — that is the remaining work, in the order listed in §14.9. Section 15 lists genuinely open/unresolved items. Section 16 is the updated deferred list.
 
 ---
 
@@ -388,12 +388,12 @@ New "Reports" entry in the hamburger drawer (alongside Employee Master, Configur
 - **D — Dashboard alerts** (§14.7). **BUILT, TESTED, AND PUSHED** (commit `f2253b4`; nav fix + D-series test scripts in `31f65b7`). Two decisions confirmed in testing:
   1. **"Mark as left"** sets `employment_status = inactive` (the standard reversible soft-delete) — confirmed as intended.
   2. **"Create manifest request"** navigates to Board → Manifest tab **without** pre-filling the named employee — accepted; pre-fill can be added later if wanted.
-- **E — Reports hub** (§14.8). **Not yet built** — next up.
+- **E — Reports hub** (§14.8). **BUILT, TESTED, AND PUSHED** (commits `7fc1f6a` route/drawer, `47c966d` View evidence modal, `5b19ded` Reconciliation Report). Reconciliation Report + "View evidence" only; the DOB Mismatch Report is deferred to Workstream H (needs DOB capture first).
 - **F — Guesthouse vs. hometown base staff** — `base_location_type` + `recall_lead_time_days` (already in schema, §14.1), shown as a tag on Roster/Employee Master cards, used as a ranking tiebreaker in `reserve.js` (guesthouse outranks hometown within the same confirmation tier).
 - **G — Passport number field** — make the document checklist render a document's number field whenever `tracks_number` is true and its date fields whenever `tracks_dates` is true, independently (so Passport shows both). Expose `tracks_number` as an editable Configuration toggle.
 - **H — DOB mismatch detection (soft flag)** — capture a `date_of_birth` per Aadhaar/PAN/Passport document. If an employee's recorded DOBs across these (where at least two are recorded) disagree, flag a separate, distinct "⚠️ DOB mismatch" badge (never merged into the cert-current badge, never blocks any action) showing the conflicting dates on tap. Add `dob_mismatch` as a read-only Employee Master export column. Feeds the DOB Mismatch Report in §14.8.
 
-B was built before C–H because it consumes the pairing data A produces, and was verified end-to-end across all three pairing-creation paths (formal request, ad-hoc RFM line, and manual exception). With A–C pushed and D awaiting test/push, the remaining order is E → F → G → H.
+B was built before C–H because it consumes the pairing data A produces, and was verified end-to-end across all three pairing-creation paths (formal request, ad-hoc RFM line, and manual exception). With A–E pushed, the remaining order is F → G → H.
 
 ---
 
@@ -403,6 +403,7 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 - **Field grouping** (Tapti/B&S/South/North/NH) — parked, not built. A lightweight optional `field` label on installations could be added later purely for analytics/filtering; no logic should depend on it yet.
 - **No-show confirmation snapshot** — reversing a no-show correction does not restore the employee's prior `confirmed` value (it stays `false`); accepted as a minor, low-cost gap rather than adding a snapshot column.
 - **alerts.js Alert-1 wait-day calc** uses `slice(0,10)` on a raw UTC timestamp (same IST/UTC class as `eb17e66`) — only misfires for outcomes recorded midnight–5:30am IST, deferred to post-E fix.
+- **penalty_exposure.daily_penalty_rate** uses the current `app_config` rate, not a historical snapshot — attribution penalty amounts in the xlsx may diverge from `penalty_log` totals if the rate has changed since offboarding. Low priority fix: snapshot rate on `overstay_attributions` at record time.
 
 ---
 
