@@ -2,7 +2,7 @@
 
 > This document is the source of truth for the build. Place it in the project root as `SPEC.md`, replacing any earlier version. Claude Code should read it fully before building, and re-read relevant sections before each module. Where this spec and a later instruction conflict, ask before proceeding.
 >
-> **Document status, so a fresh session orients instantly:** Sections 1–9 describe the original v1 build (11 steps) — fully built, tested, deployed, and live at `https://skfs-ongc-roster.vercel.app`. Sections 10–13 describe the post-v1 refinement pass (navigation restructure, Employee Master, real seed data) — fully built and pushed. Section 14 describes the manifestation/RFM/pairing/attribution system: **Workstreams A, B, C, D, and E are built, tested, and pushed to `origin/main`. Workstreams F through H are fully designed below but not yet built** — that is the remaining work, in the order listed in §14.9. Section 15 lists genuinely open/unresolved items. Section 16 is the updated deferred list.
+> **Document status, so a fresh session orients instantly:** Sections 1–9 describe the original v1 build (11 steps) — fully built, tested, deployed, and live at `https://skfs-ongc-roster.vercel.app`. Sections 10–13 describe the post-v1 refinement pass (navigation restructure, Employee Master, real seed data) — fully built and pushed. Section 14 describes the manifestation/RFM/pairing/attribution system: **Workstreams A, B, C, D, E, and F are built, tested, and pushed to `origin/main`. Workstreams G and H are fully designed below but not yet built** — that is the remaining work, in the order listed in §14.9. Section 15 lists genuinely open/unresolved items. Section 16 is the updated deferred list.
 
 ---
 
@@ -389,11 +389,11 @@ New "Reports" entry in the hamburger drawer (alongside Employee Master, Configur
   1. **"Mark as left"** sets `employment_status = inactive` (the standard reversible soft-delete) — confirmed as intended.
   2. **"Create manifest request"** navigates to Board → Manifest tab **without** pre-filling the named employee — accepted; pre-fill can be added later if wanted.
 - **E — Reports hub** (§14.8). **BUILT, TESTED, AND PUSHED** (commits `7fc1f6a` route/drawer, `47c966d` View evidence modal, `5b19ded` Reconciliation Report). Reconciliation Report + "View evidence" only; the DOB Mismatch Report is deferred to Workstream H (needs DOB capture first).
-- **F — Guesthouse vs. hometown base staff** — `base_location_type` + `recall_lead_time_days` (already in schema, §14.1), shown as a tag on Roster/Employee Master cards, used as a ranking tiebreaker in `reserve.js` (guesthouse outranks hometown within the same confirmation tier).
+- **F — Guesthouse vs. hometown base staff** — `base_location_type` + `recall_lead_time_days` (already in schema, §14.1), shown as a tag on Roster/Employee Master cards, used as a ranking tiebreaker in `reserve.js` (guesthouse outranks hometown within the same confirmation tier). **BUILT, TESTED, AND PUSHED** (commits `070e088` reserve.js ranking, `42e2047` location tag + Employee form fields). UI label for `hometown` is "Out of town" (DB enum value unchanged); recall suffix shows only for a positive lead time.
 - **G — Passport number field** — make the document checklist render a document's number field whenever `tracks_number` is true and its date fields whenever `tracks_dates` is true, independently (so Passport shows both). Expose `tracks_number` as an editable Configuration toggle.
 - **H — DOB mismatch detection (soft flag)** — capture a `date_of_birth` per Aadhaar/PAN/Passport document. If an employee's recorded DOBs across these (where at least two are recorded) disagree, flag a separate, distinct "⚠️ DOB mismatch" badge (never merged into the cert-current badge, never blocks any action) showing the conflicting dates on tap. Add `dob_mismatch` as a read-only Employee Master export column. Feeds the DOB Mismatch Report in §14.8.
 
-B was built before C–H because it consumes the pairing data A produces, and was verified end-to-end across all three pairing-creation paths (formal request, ad-hoc RFM line, and manual exception). With A–E pushed, the remaining order is F → G → H.
+B was built before C–H because it consumes the pairing data A produces, and was verified end-to-end across all three pairing-creation paths (formal request, ad-hoc RFM line, and manual exception). With A–F pushed, the remaining order is G → H.
 
 ---
 
