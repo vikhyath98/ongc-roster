@@ -10,6 +10,7 @@ import {
 } from '../lib/reserve'
 import { daysInclusive, addDays } from '../lib/dates'
 import { rotationState } from '../lib/rotation'
+import { baseLocationTag } from '../lib/location'
 import { useAuth } from '../context/AuthContext'
 import ReplaceSheet from '../components/ReplaceSheet'
 import CallDialog from '../components/CallDialog'
@@ -424,6 +425,7 @@ export default function Roster() {
                 const status = candidateStatus(c)
                 const exp = c.availability?.expires_at?.slice(0, 10)
                 const calls = c.availability?.call_count ?? 0
+                const locTag = baseLocationTag(c)
                 return (
                   <li key={c.id}>
                     <div
@@ -453,6 +455,7 @@ export default function Roster() {
                           <span className="emp-card__meta">
                             {c.emp_id} · {c.designation?.name ?? '—'}
                           </span>
+                          {locTag && <span className="reserve-sub">{locTag}</span>}
                           <span className="reserve-sub">
                             {c.restDays === null ? 'New — no prior offshore' : `${c.restDays}d rest`}
                             {` · 📞 ${calls} call${calls === 1 ? '' : 's'}`}

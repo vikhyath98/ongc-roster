@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 // (if any) current installation for display.
 const SELECT =
   'id,emp_id,full_name,phone,employment_status,notes,designation_id,current_installation_id,' +
+  'base_location_type,recall_lead_time_days,' +
   'designation:designations(id,name,category:categories(id,name)),' +
   'installation:installations(id,name,type)'
 
@@ -125,6 +126,11 @@ function toRow(input) {
     phone: input.phone?.trim() || null,
     employment_status: input.employment_status || 'active',
     notes: input.notes?.trim() || null,
+    base_location_type: input.base_location_type || null,
+    recall_lead_time_days:
+      input.recall_lead_time_days === '' || input.recall_lead_time_days == null
+        ? null
+        : Number(input.recall_lead_time_days),
   }
 }
 

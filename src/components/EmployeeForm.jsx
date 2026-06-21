@@ -11,6 +11,8 @@ const EMPTY = {
   phone: '',
   employment_status: 'active',
   notes: '',
+  base_location_type: '', // '' = not specified → null on save
+  recall_lead_time_days: '', // '' → null on save
   location_id: '', // '' = on base
   sign_on_date: '',
 }
@@ -46,6 +48,8 @@ export default function EmployeeForm({
             phone: employee.phone ?? '',
             employment_status: employee.employment_status ?? 'active',
             notes: employee.notes ?? '',
+            base_location_type: employee.base_location_type ?? '',
+            recall_lead_time_days: employee.recall_lead_time_days ?? '',
             location_id: employee.current_installation_id ?? '',
             sign_on_date: todayISO(),
           }
@@ -202,6 +206,27 @@ export default function EmployeeForm({
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
+        </label>
+
+        <label className="field">
+          <span>Base location type</span>
+          <select value={form.base_location_type} onChange={set('base_location_type')}>
+            <option value="">Not specified</option>
+            <option value="guesthouse">Guesthouse</option>
+            <option value="hometown">Out of town</option>
+          </select>
+        </label>
+
+        <label className="field">
+          <span>Recall lead time (days)</span>
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            placeholder="e.g. 2"
+            value={form.recall_lead_time_days}
+            onChange={set('recall_lead_time_days')}
+          />
         </label>
 
         <label className="field">

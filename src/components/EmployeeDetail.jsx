@@ -3,6 +3,7 @@ import Modal from './Modal'
 import EmployeeDocChecklist from './EmployeeDocChecklist'
 import RotationHistory from './RotationHistory'
 import { computeCertStatus } from '../lib/documents'
+import { baseLocationTag } from '../lib/location'
 import { useAuth } from '../context/AuthContext'
 import { employeeRotationCount, setEmploymentStatus, deleteEmployee } from '../lib/employees'
 
@@ -131,6 +132,12 @@ export default function EmployeeDetail({
           <span className="detail-meta__label">Status</span>
           <span className="detail-meta__value">{isActive ? 'Active' : 'Inactive'}</span>
         </div>
+        {baseLocationTag(employee) && (
+          <div>
+            <span className="detail-meta__label">Base location</span>
+            <span className="detail-meta__value">{baseLocationTag(employee)}</span>
+          </div>
+        )}
       </div>
 
       {employee.notes && <p className="detail-notes">{employee.notes}</p>}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { listEmployees } from '../lib/employees'
 import { listDesignations, listInstallations } from '../lib/reference'
 import { listDocumentTypes, listAllEmployeeDocuments, computeCertStatus } from '../lib/documents'
+import { baseLocationTag } from '../lib/location'
 import { getAppConfig, configInt } from '../lib/config'
 import EmployeeForm from '../components/EmployeeForm'
 import EmployeeDetail from '../components/EmployeeDetail'
@@ -225,6 +226,9 @@ export default function Employees() {
                         <span className="emp-card__meta">
                           {e.emp_id} · {e.designation?.name ?? 'No designation'}
                         </span>
+                        {baseLocationTag(e) && (
+                          <span className="emp-card__meta">{baseLocationTag(e)}</span>
+                        )}
                       </div>
                       <div className="emp-card__side">
                         {e.employment_status === 'inactive' && (
