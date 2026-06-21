@@ -136,11 +136,11 @@ export default function EmployeeDocChecklist({ employee, docTypes, userId, onCha
                 </select>
               </label>
 
-              {dt.tracks_dates === false ? (
-                // Date-less identity documents (Aadhaar, PAN): capture a
-                // number instead of meaningless issue/expiry dates.
+              {/* Number and dates render independently: Passport tracks both,
+                  Aadhaar/PAN track only a number, most docs only dates. */}
+              {dt.tracks_number && (
                 <label className="field field--inline doc-card__number">
-                  <span>Card / document number (optional)</span>
+                  <span>Document number (optional)</span>
                   <input
                     value={edit.document_number}
                     onChange={(e) => setField(dt.id, 'document_number', e.target.value)}
@@ -148,7 +148,8 @@ export default function EmployeeDocChecklist({ employee, docTypes, userId, onCha
                     spellCheck={false}
                   />
                 </label>
-              ) : (
+              )}
+              {dt.tracks_dates && (
                 <>
                   <label className="field field--inline">
                     <span>Issue date</span>
