@@ -98,6 +98,21 @@ export function computeCertStatus(designationId, docTypes, empDocs, today = toda
   return { certCurrent: problems.length === 0, problems, applicableCount: applicable.length }
 }
 
+// DOB mismatch (soft flag, SPEC.md §14.9 H). Compares the dates of birth
+// recorded on identity documents (tracks_number — Aadhaar/PAN/Passport).
+// Needs at least two recorded DOBs to declare a mismatch; a single DOB, or all
+// DOBs agreeing, is not a mismatch. Never affects cert-currency or any gate.
+export function dobMismatch(empDocs, docTypes) {
+  const idTypeIds = new Set((docTypes ?? []).filter((dt) => dt.tracks_number).map((dt) => dt.id))
+  const nameById = new Map((docTypes ?? []).map((dt) => [dt.id, dt.name]))
+  const recorded = (empDocs ?? [])
+    .filter((d) => idTypeIds.has(d.document_type_id) && d.date_of_birth)
+    .map((d) => ({ name: nameById.get(d.document_type_id) ?? '—', dob: d.date_of_birth }))
+  if (recorded.length < 2) return { mismatch: false }
+  if (recorded.every((r) => r.dob === recorded[0].dob)) return { mismatch: false }
+  return { mismatch: true, dates: recorded }
+}
+
 // Bulk-verify selected document types for selected employees (§6.4).
 // For each employee × doc type, only apply where the doc type is applicable to
 // that employee's designation; non-applicable pairs are skipped (counted).

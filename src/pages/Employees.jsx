@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listEmployees } from '../lib/employees'
 import { listDesignations, listInstallations } from '../lib/reference'
-import { listDocumentTypes, listAllEmployeeDocuments, computeCertStatus } from '../lib/documents'
+import { listDocumentTypes, listAllEmployeeDocuments, computeCertStatus, dobMismatch } from '../lib/documents'
 import { baseLocationTag } from '../lib/location'
 import { getAppConfig, configInt } from '../lib/config'
 import EmployeeForm from '../components/EmployeeForm'
@@ -139,6 +139,9 @@ export default function Employees() {
   const detailEmployee = detail
     ? employees.find((e) => e.id === detail.id) ?? detail
     : null
+  const detailMismatch = detailEmployee
+    ? dobMismatch(docsByEmployee.get(detailEmployee.id) ?? [], docTypes)
+    : { mismatch: false }
 
   return (
     <section>
@@ -198,11 +201,9 @@ export default function Employees() {
           ) : (
             <ul className="card-list">
               {filtered.map((e) => {
-                const cert = computeCertStatus(
-                  e.designation_id,
-                  docTypes,
-                  docsByEmployee.get(e.id) ?? []
-                )
+                const empDocs = docsByEmployee.get(e.id) ?? []
+                const cert = computeCertStatus(e.designation_id, docTypes, empDocs)
+                const dob = dobMismatch(empDocs, docTypes)
                 const isSel = selectedIds.has(e.id)
                 return (
                   <li key={e.id}>
@@ -237,6 +238,7 @@ export default function Employees() {
                         <span className={`pill ${cert.certCurrent ? 'pill--ok' : 'pill--bad'}`}>
                           {cert.certCurrent ? 'Certs OK' : `${cert.problems.length} cert issue${cert.problems.length === 1 ? '' : 's'}`}
                         </span>
+                        {dob.mismatch && <span className="pill pill--warn">⚠️ DOB mismatch</span>}
                         <span className="pill">
                           {e.installation ? `📍 ${e.installation.name}` : 'On base'}
                         </span>
@@ -257,6 +259,7 @@ export default function Employees() {
         employee={detailEmployee}
         docTypes={docTypes}
         employeeDocs={detailEmployee ? docsByEmployee.get(detailEmployee.id) ?? [] : []}
+        mismatch={detailMismatch}
         maxServiceDays={maxServiceDays}
         onEdit={editFromDetail}
         onClose={() => setDetail(null)}

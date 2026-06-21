@@ -9,11 +9,18 @@ import { employeeRotationCount, setEmploymentStatus, deleteEmployee } from '../l
 
 // Read view of one employee: identity, cert-current summary, the editable
 // document checklist, and a Manage section (deactivate / smart hard delete).
+// Reformat an ISO date ('YYYY-MM-DD') to 'DD-MM-YYYY' for display.
+const fmtDob = (iso) => {
+  const [y, m, d] = (iso ?? '').split('-')
+  return y && m && d ? `${d}-${m}-${y}` : iso
+}
+
 export default function EmployeeDetail({
   open,
   employee,
   docTypes,
   employeeDocs,
+  mismatch = { mismatch: false },
   maxServiceDays = 70,
   onEdit,
   onClose,
@@ -158,6 +165,20 @@ export default function EmployeeDetail({
           </div>
         )}
       </div>
+
+      {mismatch.mismatch && (
+        <div className="cert-summary cert-summary--warn">
+          <strong>⚠️ DOB mismatch</strong>
+          <p className="muted">Dates of birth differ across identity documents — review and correct.</p>
+          <ul className="cert-problems">
+            {mismatch.dates.map((x) => (
+              <li key={x.name}>
+                {x.name}: <strong>{fmtDob(x.dob)}</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <h3 className="section-heading">Documents</h3>
       <EmployeeDocChecklist

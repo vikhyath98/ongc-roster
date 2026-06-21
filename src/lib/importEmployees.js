@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { addDays, daysBetween, daysInclusive, todayISO } from './dates'
 import { listEmployees } from './employees'
-import { computeCertStatus, listDocumentTypes, listAllEmployeeDocuments } from './documents'
+import { computeCertStatus, listDocumentTypes, listAllEmployeeDocuments, dobMismatch } from './documents'
 import { isConfirmedLive, listAvailability } from './reserve'
 
 // SheetJS is large and only needed for import/export/template, so load it on
@@ -38,7 +38,7 @@ const IMPORT_COLUMNS = [
 
 // Read-only info columns appended to an export. Ignored on import (their
 // headers carry a [Read Only] tag that matches no synonym).
-const READONLY_COLUMNS = ['cert_status', 'cert_issues', 'days_since_signoff', 'confirmation_status']
+const READONLY_COLUMNS = ['cert_status', 'cert_issues', 'days_since_signoff', 'confirmation_status', 'dob_mismatch']
 const readonlyHeader = (c) => `${c} [Read Only]`
 
 // Accepted header spellings -> canonical field.
@@ -436,7 +436,9 @@ export async function exportEmployees() {
     const open = rots.find((r) => !r.sign_off_date)
     const recent3 = closed.slice(-3) // most recent 3, already oldest-first
 
-    const cert = computeCertStatus(e.designation_id, docTypes, docsByEmp.get(e.id) ?? [], today)
+    const empDocs = docsByEmp.get(e.id) ?? []
+    const cert = computeCertStatus(e.designation_id, docTypes, empDocs, today)
+    const dob = dobMismatch(empDocs, docTypes)
     const certStatus = cert.certCurrent
       ? 'Certs OK'
       : `${cert.problems.length} issue${cert.problems.length === 1 ? '' : 's'}`
@@ -478,6 +480,7 @@ export async function exportEmployees() {
       cert_issues: certIssues,
       days_since_signoff: daysSince,
       confirmation_status: confirmation,
+      dob_mismatch: dob.mismatch ? 'Yes' : '',
     }
     aoa.push([...IMPORT_COLUMNS, ...READONLY_COLUMNS].map((c) => row[c] ?? ''))
   }
