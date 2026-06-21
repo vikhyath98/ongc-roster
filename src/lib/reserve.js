@@ -23,6 +23,7 @@ export async function listOnBaseEmployees() {
     .from('employees')
     .select(
       'id,emp_id,full_name,phone,designation_id,employment_status,current_installation_id,' +
+        'base_location_type,recall_lead_time_days,' +
         'designation:designations(id,name)'
     )
     .is('current_installation_id', null)
@@ -125,6 +126,14 @@ export function reservePool(candidates) {
   return candidates.filter((c) => c.eligible && c.cert.certCurrent && c.liveConfirmed)
 }
 
+// Guesthouse staff are faster to recall than hometown, so within the same
+// confirmation tier they rank first (SPEC.md §14.9 F). null base_location_type
+// is treated as hometown (conservative default). recall_lead_time_days is
+// display-only and never used in ranking.
+function locationRank(c) {
+  return c.base_location_type === 'guesthouse' ? 0 : 1
+}
+
 // De-emphasise repeated no-answers (§6.5/§3.6).
 const NO_ANSWER_LIMIT = 3
 export function isDeprioritised(c) {
@@ -142,6 +151,9 @@ export function rankReplacementCandidates(candidates, designationId) {
   )
   return pool.sort((a, b) => {
     if (a.liveConfirmed !== b.liveConfirmed) return a.liveConfirmed ? -1 : 1
+    const la = locationRank(a)
+    const lb = locationRank(b)
+    if (la !== lb) return la - lb
     const da = isDeprioritised(a)
     const db = isDeprioritised(b)
     if (da !== db) return da ? 1 : -1
@@ -176,6 +188,9 @@ export function candidateStatus(c) {
 // Rank order within the "available to call" group: deprioritised (repeated
 // no-answer) last, then fewest calls, then name (§6.5).
 function availableRank(a, b) {
+  const la = locationRank(a)
+  const lb = locationRank(b)
+  if (la !== lb) return la - lb
   const da = isDeprioritised(a)
   const db = isDeprioritised(b)
   if (da !== db) return da ? 1 : -1
@@ -205,9 +220,12 @@ export function splitReplacementGroups(candidates, designationId) {
       available.push(c)
     }
   }
-  confirmed.sort((a, b) =>
-    (a.availability?.expires_at ?? '').localeCompare(b.availability?.expires_at ?? '')
-  )
+  confirmed.sort((a, b) => {
+    const la = locationRank(a)
+    const lb = locationRank(b)
+    if (la !== lb) return la - lb
+    return (a.availability?.expires_at ?? '').localeCompare(b.availability?.expires_at ?? '')
+  })
   available.sort(availableRank)
   return { confirmed, available, blocked }
 }
