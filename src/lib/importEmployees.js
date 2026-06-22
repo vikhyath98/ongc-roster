@@ -22,6 +22,8 @@ const IMPORT_COLUMNS = [
   'designation',
   'phone',
   'employment_status',
+  'base_location_type',
+  'recall_lead_time_days',
   'notes',
   'current_location',
   'current_sign_on',
@@ -48,6 +50,8 @@ const HEADER_SYNONYMS = {
   designation: ['designation', 'role', 'post'],
   phone: ['phone', 'mobile', 'contact', 'phone number', 'mobile number', 'phoneno'],
   employment_status: ['employment_status', 'employment status', 'status'],
+  base_location_type: ['base_location_type', 'base location type', 'location type', 'base location'],
+  recall_lead_time_days: ['recall_lead_time_days', 'recall lead time', 'recall days', 'recall lead time days'],
   notes: ['notes', 'note', 'remark', 'remarks'],
   current_location: ['current_location', 'current location', 'location', 'installation', 'posting', 'site', 'platform rig'],
   current_sign_on: ['current_sign_on', 'current sign on', 'sign_on_date', 'sign on date', 'signon date', 'sign on', 'onboard date', 'boarding date', 'date of boarding'],
@@ -184,6 +188,27 @@ export function validateRows(rows, designations, installations, existingEmpIds, 
       else errors.push('employment_status must be "active" or "inactive".')
     }
 
+    // base_location_type: optional; guesthouse/hometown (the "Out of town"
+    // label maps to hometown). Blank/unknown stays null. (migration 0006 enum)
+    let base_location_type = null
+    if (data.base_location_type) {
+      const v = normalize(data.base_location_type)
+      if (v === 'guesthouse') base_location_type = 'guesthouse'
+      else if (v === 'hometown' || v === 'out of town') base_location_type = 'hometown'
+      else errors.push('base_location_type must be "guesthouse" or "hometown" (or blank).')
+    }
+
+    // recall_lead_time_days: optional; non-negative whole number or blank.
+    let recall_lead_time_days = null
+    if (data.recall_lead_time_days) {
+      const n = Number(data.recall_lead_time_days)
+      if (!Number.isInteger(n) || n < 0) {
+        errors.push('recall_lead_time_days must be a whole number (0 or more), or blank.')
+      } else {
+        recall_lead_time_days = n
+      }
+    }
+
     // ----- Rotation history (up to 3 completed stints, oldest -> most recent) -----
     const rawStints = [1, 2, 3].map((n) => rawStint(data, n))
 
@@ -285,7 +310,15 @@ export function validateRows(rows, designations, installations, existingEmpIds, 
 
     return {
       rowNumber,
-      data: { ...data, designation_id, employment_status, stints, current },
+      data: {
+        ...data,
+        designation_id,
+        employment_status,
+        base_location_type,
+        recall_lead_time_days,
+        stints,
+        current,
+      },
       errors,
       warnings,
       valid: errors.length === 0,
@@ -306,6 +339,8 @@ export async function importValidRows(validated, { maxServiceDays = 70, userId }
     phone: r.data.phone || null,
     notes: r.data.notes || null,
     employment_status: r.data.employment_status,
+    base_location_type: r.data.base_location_type,
+    recall_lead_time_days: r.data.recall_lead_time_days,
   }))
 
   const { data: inserted, error } = await supabase
@@ -464,6 +499,8 @@ export async function exportEmployees() {
       designation: e.designation?.name ?? '',
       phone: e.phone ?? '',
       employment_status: e.employment_status,
+      base_location_type: e.base_location_type ?? '',
+      recall_lead_time_days: e.recall_lead_time_days ?? '',
       notes: e.notes ?? '',
       current_location: open ? open.installation?.name ?? '' : '',
       current_sign_on: open?.sign_on_date ?? '',
@@ -501,6 +538,8 @@ const COLUMN_HELP = {
   designation: 'Required. Must match a designation name exactly.',
   phone: 'Optional. Contact number.',
   employment_status: 'Optional. "active" or "inactive". Defaults to active if blank.',
+  base_location_type: 'Optional. guesthouse or hometown (stored as hometown, displays as Out of town). Leave blank if unknown.',
+  recall_lead_time_days: 'Optional. Days of advance notice needed for travel to base. Numbers only. Leave blank if not applicable.',
   notes: 'Optional. Free text.',
   current_location: 'Optional. Installation they are CURRENTLY on (with current_sign_on). Leave blank if on base.',
   current_sign_on: 'Optional. Date they boarded their current location (YYYY-MM-DD). Both this and current_location, or neither.',
@@ -525,6 +564,8 @@ const COLUMN_EXAMPLE = {
   designation: 'Cook',
   phone: '9876543210',
   employment_status: 'active',
+  base_location_type: 'hometown',
+  recall_lead_time_days: '2',
   notes: 'Senior cook',
   current_location: 'ICP',
   current_sign_on: '2026-05-01',

@@ -708,6 +708,46 @@ code {
   margin-top: 2px;
 }
 
+/* Base-staff location-type summary cards (toggle filters). */
+.loc-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.loc-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.loc-card--on {
+  border-color: var(--teal);
+  background: rgba(94, 197, 232, 0.12);
+  color: var(--navy);
+}
+
+.loc-card__count {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--navy);
+  line-height: 1.1;
+}
+
+.loc-card__label {
+  font-size: 0.72rem;
+  text-align: center;
+}
+
 .roster-clear {
   margin-left: 8px;
 }
@@ -1499,6 +1539,37 @@ code {
 
 .cand-card__actions .btn {
   flex: 1;
+}
+
+/* Find Replacement: dynamic rotation-deadline label + muted date sub-line. */
+.target-card__deadline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Find Replacement: inline "Manifest" quick-action (expands within the row). */
+.cand-manifest {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cand-manifest__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cand-manifest__ok {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1c6e45;
 }
 
 /* Tappable phone number at the top of the call dialog. */

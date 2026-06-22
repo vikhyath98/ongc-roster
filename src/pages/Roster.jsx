@@ -11,6 +11,7 @@ import {
 import { daysInclusive, addDays } from '../lib/dates'
 import { rotationState } from '../lib/rotation'
 import { baseLocationTag } from '../lib/location'
+import { createManifestRequest } from '../lib/manifest'
 import { useAuth } from '../context/AuthContext'
 import ReplaceSheet from '../components/ReplaceSheet'
 import CallDialog from '../components/CallDialog'
@@ -50,6 +51,8 @@ export default function Roster() {
       ? searchParams.get('confirm')
       : 'all'
   )
+  // Base-tab location-type filter ('all' | 'guesthouse' | 'hometown' | 'unknown').
+  const [fBaseLoc, setFBaseLoc] = useState('all')
 
   // Replacement sheet + call dialog.
   const [replaceForId, setReplaceForId] = useState(null)
@@ -126,13 +129,33 @@ export default function Roster() {
     for (const c of baseStaff) if (c.designation) m.set(c.designation.id, c.designation)
     return [...m.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [baseStaff])
+  // Location-type group counts for the summary cards (null/other = Don't know).
+  const baseLocCounts = useMemo(() => {
+    let guesthouse = 0
+    let hometown = 0
+    let unknown = 0
+    for (const c of baseStaff) {
+      if (c.base_location_type === 'guesthouse') guesthouse++
+      else if (c.base_location_type === 'hometown') hometown++
+      else unknown++
+    }
+    return { guesthouse, hometown, unknown }
+  }, [baseStaff])
   const baseShown = useMemo(() => {
     let list = fBaseDesig ? baseStaff.filter((c) => c.designation_id === fBaseDesig) : baseStaff
     if (fBaseConfirm === 'confirmed') list = list.filter((c) => c.liveConfirmed)
     else if (fBaseConfirm === 'unconfirmed') list = list.filter((c) => !c.liveConfirmed)
+    if (fBaseLoc === 'guesthouse') list = list.filter((c) => c.base_location_type === 'guesthouse')
+    else if (fBaseLoc === 'hometown') list = list.filter((c) => c.base_location_type === 'hometown')
+    else if (fBaseLoc === 'unknown')
+      list = list.filter(
+        (c) => c.base_location_type !== 'guesthouse' && c.base_location_type !== 'hometown'
+      )
     return list
-  }, [baseStaff, fBaseDesig, fBaseConfirm])
-  const baseFiltered = Boolean(fBaseDesig) || fBaseConfirm !== 'all'
+  }, [baseStaff, fBaseDesig, fBaseConfirm, fBaseLoc])
+  const baseFiltered = Boolean(fBaseDesig) || fBaseConfirm !== 'all' || fBaseLoc !== 'all'
+  // Clicking the active location card again clears the filter.
+  const toggleBaseLoc = (key) => setFBaseLoc((cur) => (cur === key ? 'all' : key))
 
   // ----- Replacement sheet -----
   const target = useMemo(
@@ -164,6 +187,22 @@ export default function Roster() {
 
   const deadlineFor = (t) =>
     t.expected_rotation_date || addDays(t.sign_on_date, thresholds.max)
+
+  // Quick "Manifest" action from a Find Replacement candidate row: file a
+  // single-line manifest request relieving the target with this candidate.
+  // Leaves the sheet open (manager may still log a call). Returns { error }.
+  async function handleManifest({ candidate, requestDate }) {
+    if (!target) return { error: { message: 'No target selected.' } }
+    const installationId = target.installation_id ?? target.installation?.id
+    if (!installationId) {
+      return { error: { message: 'Outgoing employee has no current installation.' } }
+    }
+    const { error: err } = await createManifestRequest(
+      { installationId, requestDate, requestedBy: user?.id },
+      [{ employeeId: candidate.id, replacingEmployeeId: target.employee?.id }]
+    )
+    return { error: err }
+  }
 
   async function doConfirm(c) {
     setFlash('')
@@ -354,6 +393,37 @@ export default function Roster() {
         <>
           {baseFlash && <p className="banner banner--info">{baseFlash}</p>}
           {baseError && <p className="banner banner--error">{baseError}</p>}
+          {baseStaff.length > 0 && (
+            <div className="loc-cards">
+              <button
+                type="button"
+                className={'loc-card' + (fBaseLoc === 'guesthouse' ? ' loc-card--on' : '')}
+                onClick={() => toggleBaseLoc('guesthouse')}
+                aria-pressed={fBaseLoc === 'guesthouse'}
+              >
+                <span className="loc-card__count">{baseLocCounts.guesthouse}</span>
+                <span className="loc-card__label">🏨 Guesthouse</span>
+              </button>
+              <button
+                type="button"
+                className={'loc-card' + (fBaseLoc === 'hometown' ? ' loc-card--on' : '')}
+                onClick={() => toggleBaseLoc('hometown')}
+                aria-pressed={fBaseLoc === 'hometown'}
+              >
+                <span className="loc-card__count">{baseLocCounts.hometown}</span>
+                <span className="loc-card__label">🏠 Out of town</span>
+              </button>
+              <button
+                type="button"
+                className={'loc-card' + (fBaseLoc === 'unknown' ? ' loc-card--on' : '')}
+                onClick={() => toggleBaseLoc('unknown')}
+                aria-pressed={fBaseLoc === 'unknown'}
+              >
+                <span className="loc-card__count">{baseLocCounts.unknown}</span>
+                <span className="loc-card__label">❓ Don't know</span>
+              </button>
+            </div>
+          )}
           {baseStaff.length > 0 && (
             <div className="board-controls roster-filters">
               <label className="field">
@@ -548,11 +618,13 @@ export default function Roster() {
         open={Boolean(target)}
         target={target}
         targetState={targetState}
+        deadline={target ? deadlineFor(target) : null}
         groups={replaceGroups}
         flash={flash}
         error={sheetError}
         onCall={(c) => setCallFor(c)}
         onConfirm={doConfirm}
+        onManifest={handleManifest}
         onClose={closeReplace}
       />
 

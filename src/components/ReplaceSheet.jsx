@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react'
 import Modal from './Modal'
 import { isDeprioritised } from '../lib/reserve'
-import { daysInclusive } from '../lib/dates'
+import { daysInclusive, daysBetween, todayISO } from '../lib/dates'
 
 const OUTCOME_LABEL = {
   no_answer: 'No answer',
@@ -27,19 +28,123 @@ export default function ReplaceSheet({
   open,
   target,
   targetState,
+  deadline,
   groups,
   flash,
   error,
   onCall,
   onConfirm,
+  onManifest,
   onClose,
 }) {
+  // Inline "Manifest" quick-action state (one open form at a time).
+  const [manifestForId, setManifestForId] = useState(null)
+  const [manifestDate, setManifestDate] = useState(todayISO())
+  const [manifestBusy, setManifestBusy] = useState(false)
+  const [manifestErr, setManifestErr] = useState('')
+  const [manifestOkFor, setManifestOkFor] = useState(null)
+
+  // Reset the inline manifest UI whenever the sheet targets a different stint.
+  useEffect(() => {
+    setManifestForId(null)
+    setManifestOkFor(null)
+    setManifestErr('')
+    setManifestDate(todayISO())
+  }, [target?.id])
+
   if (!open || !target) return null
 
   const days = daysInclusive(target.sign_on_date)
-  const deadline = target.expected_rotation_date
+  const dl = deadline || target.expected_rotation_date
   const { confirmed = [], available = [], blocked = [] } = groups ?? {}
   const designationName = target.employee?.designation?.name ?? ''
+
+  // Deadline status relative to today: overdue (red) / today (red) / remaining
+  // (amber). The date itself is kept as a muted sub-label for reference.
+  let deadlineLabel = null
+  let deadlineCls = ''
+  if (dl) {
+    const diff = daysBetween(todayISO(), dl) // >0 future, 0 today, <0 past
+    if (diff > 0) {
+      deadlineLabel = `${diff} day${diff === 1 ? '' : 's'} remaining`
+      deadlineCls = 'pill--warn'
+    } else if (diff === 0) {
+      deadlineLabel = 'Deadline today'
+      deadlineCls = 'pill--bad'
+    } else {
+      const over = -diff
+      deadlineLabel = `${over} day${over === 1 ? '' : 's'} overdue`
+      deadlineCls = 'pill--bad'
+    }
+  }
+
+  function openManifest(c) {
+    setManifestForId(c.id)
+    setManifestOkFor(null)
+    setManifestDate(todayISO())
+    setManifestErr('')
+  }
+  function cancelManifest() {
+    setManifestForId(null)
+    setManifestErr('')
+  }
+  async function submitManifest(c) {
+    setManifestBusy(true)
+    setManifestErr('')
+    const { error: err } = await onManifest({ candidate: c, requestDate: manifestDate })
+    setManifestBusy(false)
+    if (err) {
+      setManifestErr(err.message)
+      return
+    }
+    setManifestForId(null)
+    setManifestOkFor(c.id)
+  }
+
+  // The Manifest button (alongside Call/Confirm) for a confirmed/available row.
+  const manifestBtn = (c) => (
+    <button type="button" className="btn btn--ghost btn--sm" onClick={() => openManifest(c)}>
+      Manifest…
+    </button>
+  )
+  // The expandable panel below the row: success note, the mini-form, or nothing.
+  const manifestPanel = (c) => {
+    if (manifestOkFor === c.id) {
+      return <p className="cand-manifest__ok">✅ Manifest request created</p>
+    }
+    if (manifestForId !== c.id) return null
+    return (
+      <div className="cand-manifest">
+        <label className="field field--inline">
+          <span>Request date</span>
+          <input
+            type="date"
+            value={manifestDate}
+            onChange={(e) => setManifestDate(e.target.value)}
+          />
+        </label>
+        {manifestErr && <p className="banner banner--error">{manifestErr}</p>}
+        <div className="cand-manifest__actions">
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={cancelManifest}
+            disabled={manifestBusy}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={() => submitManifest(c)}
+            disabled={manifestBusy || !manifestDate}
+          >
+            {manifestBusy ? 'Submitting…' : 'Submit manifest request'}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <Modal open={open} title="Find replacement" onClose={onClose}>
@@ -57,12 +162,13 @@ export default function ReplaceSheet({
           <span>
             <strong>{days}</strong> days served
           </span>
-          {deadline && (
-            <span>
-              Rotation deadline: <strong>{deadline}</strong>
-            </span>
-          )}
         </div>
+        {deadlineLabel && (
+          <div className="target-card__deadline">
+            <span className={`pill ${deadlineCls}`}>{deadlineLabel}</span>
+            <span className="reserve-sub">Rotation deadline: {dl}</span>
+          </div>
+        )}
       </div>
 
       {flash && <p className="banner banner--info">{flash}</p>}
@@ -91,6 +197,8 @@ export default function ReplaceSheet({
                       {callSummary(c.availability)}
                       {exp ? ` · valid until ${exp}` : ''}
                     </div>
+                    <div className="cand-card__actions">{manifestBtn(c)}</div>
+                    {manifestPanel(c)}
                   </div>
                 </li>
               )
@@ -140,7 +248,9 @@ export default function ReplaceSheet({
                     >
                       Confirm
                     </button>
+                    {manifestBtn(c)}
                   </div>
+                  {manifestPanel(c)}
                 </div>
               </li>
             )
