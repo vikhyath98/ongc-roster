@@ -78,6 +78,7 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [bandModal, setBandModal] = useState(null) // band key or null
   const [varianceOpen, setVarianceOpen] = useState(false)
+  const [alertsOpen, setAlertsOpen] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -373,96 +374,6 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {/* Manifestation alerts (§14.7) */}
-      {alertFlash && <p className="banner banner--info">{alertFlash}</p>}
-
-      {totalAlerts > 0 && (
-        <>
-          {awaitingCount > 0 && (
-            <div className="dash-card">
-              <div className="dash-card__head">
-                <h3>⏳ Awaiting re-manifest</h3>
-                <span className="muted">{awaitingCount} on base</span>
-              </div>
-              {alerts.awaitingDropped.length > 0 && (
-                <>
-                  <p className="alert-subhead muted">Dropped — chase ONGC for a seat</p>
-                  <ul className="card-list">
-                    {alerts.awaitingDropped.map((r) => (
-                      <li key={r.employee.id}>{renderAwaiting(r)}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
-              {alerts.awaitingNoShow.length > 0 && (
-                <>
-                  <p className="alert-subhead muted">
-                    No-show — chase the employee / reconsider reliability
-                  </p>
-                  <ul className="card-list">
-                    {alerts.awaitingNoShow.map((r) => (
-                      <li key={r.employee.id}>{renderAwaiting(r)}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
-          )}
-
-          {alerts.reliefFailed.length > 0 && (
-            <div className="dash-card">
-              <div className="dash-card__head">
-                <h3>🚁 Relief failed to arrive</h3>
-                <span className="muted">{alerts.reliefFailed.length} overdue</span>
-              </div>
-              <ul className="card-list">
-                {alerts.reliefFailed.map(({ stint: s, reason }) => (
-                  <li key={s.id}>
-                    {renderStintRow(
-                      s,
-                      {
-                        block: true,
-                        text:
-                          reason === 'dropped'
-                            ? 'Last relief was dropped by ONGC — no seat'
-                            : 'Last relief no-showed — did not board',
-                      },
-                      null
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {alerts.manifestNeeded.length > 0 && (
-            <div className="dash-card">
-              <div className="dash-card__head">
-                <h3>📋 Manifest needed soon</h3>
-                <span className="muted">{alerts.manifestNeeded.length} unrequested</span>
-              </div>
-              <ul className="card-list">
-                {alerts.manifestNeeded.map(({ stint: s }) => (
-                  <li key={s.id}>
-                    {renderStintRow(
-                      s,
-                      { block: false, text: 'No manifest request filed yet' },
-                      <button
-                        type="button"
-                        className="btn btn--ghost btn--sm roster-card__action"
-                        onClick={() => navigate('/boarding')}
-                      >
-                        ＋ Create manifest request
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </>
-      )}
-
       {/* Rotation window */}
       <div className="dash-card">
         <div className="dash-card__head">
@@ -525,6 +436,112 @@ export default function Dashboard() {
         <span className="penalty-exposure__value">{inr.format(openExposure)}</span>
         <span className="muted">unreconciled · tap to review</span>
       </Link>
+
+      {/* Manifestation alerts (§14.7) — collapsible, always visible as a landmark */}
+      <div className="dash-card">
+        {alertFlash && <p className="banner banner--info">{alertFlash}</p>}
+        <button
+          type="button"
+          className="dash-card__head accordion-head"
+          onClick={() => setAlertsOpen((o) => !o)}
+          aria-expanded={alertsOpen}
+        >
+          <h3>⏳ Manifest alerts</h3>
+          <span className="muted">
+            {totalAlerts} item{totalAlerts !== 1 ? 's' : ''}
+          </span>
+          <span className="accordion-chevron">{alertsOpen ? '▾' : '▸'}</span>
+        </button>
+        {alertsOpen &&
+          (totalAlerts === 0 ? (
+            <p className="muted">No manifest alerts</p>
+          ) : (
+            <>
+              {awaitingCount > 0 && (
+                <div className="dash-card">
+                  <div className="dash-card__head">
+                    <h3>⏳ Awaiting re-manifest</h3>
+                    <span className="muted">{awaitingCount} on base</span>
+                  </div>
+                  {alerts.awaitingDropped.length > 0 && (
+                    <>
+                      <p className="alert-subhead muted">Dropped — chase ONGC for a seat</p>
+                      <ul className="card-list">
+                        {alerts.awaitingDropped.map((r) => (
+                          <li key={r.employee.id}>{renderAwaiting(r)}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {alerts.awaitingNoShow.length > 0 && (
+                    <>
+                      <p className="alert-subhead muted">
+                        No-show — chase the employee / reconsider reliability
+                      </p>
+                      <ul className="card-list">
+                        {alerts.awaitingNoShow.map((r) => (
+                          <li key={r.employee.id}>{renderAwaiting(r)}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {alerts.reliefFailed.length > 0 && (
+                <div className="dash-card">
+                  <div className="dash-card__head">
+                    <h3>🚁 Relief failed to arrive</h3>
+                    <span className="muted">{alerts.reliefFailed.length} overdue</span>
+                  </div>
+                  <ul className="card-list">
+                    {alerts.reliefFailed.map(({ stint: s, reason }) => (
+                      <li key={s.id}>
+                        {renderStintRow(
+                          s,
+                          {
+                            block: true,
+                            text:
+                              reason === 'dropped'
+                                ? 'Last relief was dropped by ONGC — no seat'
+                                : 'Last relief no-showed — did not board',
+                          },
+                          null
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {alerts.manifestNeeded.length > 0 && (
+                <div className="dash-card">
+                  <div className="dash-card__head">
+                    <h3>📋 Manifest needed soon</h3>
+                    <span className="muted">{alerts.manifestNeeded.length} unrequested</span>
+                  </div>
+                  <ul className="card-list">
+                    {alerts.manifestNeeded.map(({ stint: s }) => (
+                      <li key={s.id}>
+                        {renderStintRow(
+                          s,
+                          { block: false, text: 'No manifest request filed yet' },
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--sm roster-card__action"
+                            onClick={() => navigate('/boarding')}
+                          >
+                            ＋ Create manifest request
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ))}
+      </div>
 
       {/* Staffing variance (collapsible matrix) */}
       <div className="dash-card">
