@@ -1267,34 +1267,74 @@ code {
   color: #a4231a;
 }
 
-/* Staffing variance */
-.variance-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+/* Accordion / collapsible card header (Reports cards, Staffing variance). */
+.accordion-head {
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  padding: 0;
+  color: inherit;
 }
 
-.variance-install__name {
-  font-size: 0.95rem;
-  margin-bottom: 4px;
+.accordion-chevron {
+  font-size: 0.9rem;
+  color: var(--muted);
+  flex-shrink: 0;
 }
 
-.variance-row {
-  margin: 2px 0;
-  font-size: 0.88rem;
+/* Staffing variance matrix (rows = installations, columns = designations). */
+.variance-matrix-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.variance-matrix {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.82rem;
+}
+
+.variance-matrix th,
+.variance-matrix td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.variance-matrix thead th {
+  background: rgba(11, 61, 92, 0.04);
   font-weight: 600;
 }
 
-.variance-row--short {
+.variance-matrix thead th:first-child,
+.variance-matrix__inst {
+  position: sticky;
+  left: 0;
+  text-align: left;
+  font-weight: 600;
+  background: var(--card);
+}
+
+.variance-matrix thead th:first-child {
+  background: #eef2f5;
+}
+
+.variance-cell--short {
   color: var(--red);
+  font-weight: 600;
 }
 
-.variance-row--surplus {
-  color: #8a6300;
+.variance-cell--over {
+  color: var(--green);
+  font-weight: 600;
 }
 
-.dash-attention-head {
-  margin: 4px 0 -4px;
+.variance-cell--ok {
+  color: var(--muted);
 }
 
 /* ---------- Penalty tracker ---------- */

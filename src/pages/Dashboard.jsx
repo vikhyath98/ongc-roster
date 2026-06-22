@@ -19,14 +19,46 @@ const BAND_LABEL = {
   over: 'Over threshold',
 }
 
-// Pluralise a designation name for the variance lines ("1 Cook" / "2 Cooks").
-const plural = (name, n) => `${name}${n > 1 ? 's' : ''}`
+// Short column codes (+ emoji) for the staffing-variance matrix, keyed by the
+// real designation name so the lookup never depends on column order.
+const DESIG_CODE = {
+  'Catering Manager': { code: 'CM', emoji: '🍽️' },
+  Cook: { code: 'Ck', emoji: '👨‍🍳' },
+  'Assistant Cook': { code: 'AC', emoji: '🥄' },
+  Housekeeper: { code: 'HK', emoji: '🧹' },
+  'Room Boy': { code: 'RB', emoji: '🛏️' },
+  Laundry: { code: 'LN', emoji: '👔' },
+  Electrician: { code: 'EL', emoji: '⚡' },
+  Plumber: { code: 'PL', emoji: '🔧' },
+  'Pest Controller': { code: 'PC', emoji: '🪲' },
+}
+// Column order for the matrix (catering roles, housekeeping, trades, pest).
+const DESIG_ORDER = [
+  'Catering Manager',
+  'Cook',
+  'Assistant Cook',
+  'Housekeeper',
+  'Room Boy',
+  'Laundry',
+  'Electrician',
+  'Plumber',
+  'Pest Controller',
+]
 
 const inr = new Intl.NumberFormat('en-IN', {
   style: 'currency',
   currency: 'INR',
   maximumFractionDigits: 0,
 })
+
+// One staffing-variance matrix cell: ↓N short (red), ↑N over (green), — at
+// target (muted), or blank when this designation isn't required here at all.
+function varianceCell({ required, actual, diff }) {
+  if (required === 0 && actual === 0) return ''
+  if (diff > 0) return <span className="variance-cell--short">↓{diff}</span>
+  if (diff < 0) return <span className="variance-cell--over">↑{-diff}</span>
+  return <span className="variance-cell--ok">—</span>
+}
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -45,6 +77,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [bandModal, setBandModal] = useState(null) // band key or null
+  const [varianceOpen, setVarianceOpen] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -179,11 +212,6 @@ export default function Dashboard() {
       .sort((a, b) => b.count - a.count || a.designation.localeCompare(b.designation))
   }
 
-  const needsAttention = useMemo(
-    () => decorated.filter((s) => s.days >= thresholds.warning),
-    [decorated, thresholds]
-  )
-
   // Reserve readiness from the same candidates loadCandidates() builds.
   // Confirmed ready = the strict reserve pool (§3.4); eligible-unconfirmed =
   // deployable but not yet confirmed (or confirmation expired).
@@ -212,16 +240,17 @@ export default function Dashboard() {
 
   // Staffing variance: required vs currently-offshore per designation, per
   // active installation that has requirements configured (client-side join).
+  // Same data source + calculation as before; shaped into a matrix (rows =
+  // installations, columns = designations) for the collapsible table.
   const variance = useMemo(() => {
-    const desigName = new Map(designations.map((d) => [d.id, d.name]))
     const installById = new Map(installations.map((i) => [i.id, i]))
 
-    // Requirements only for active installations.
+    // Requirements only for active installations, keyed designation → required.
     const reqByInstall = new Map()
     for (const r of requirements) {
       if (!installById.has(r.installation_id)) continue
-      if (!reqByInstall.has(r.installation_id)) reqByInstall.set(r.installation_id, [])
-      reqByInstall.get(r.installation_id).push(r)
+      if (!reqByInstall.has(r.installation_id)) reqByInstall.set(r.installation_id, new Map())
+      reqByInstall.get(r.installation_id).set(r.designation_id, r.required_count ?? 0)
     }
 
     // Current offshore headcount keyed by installation+designation.
@@ -234,24 +263,22 @@ export default function Dashboard() {
       offCount.set(key, (offCount.get(key) ?? 0) + 1)
     }
 
+    // Columns: designations that have a known code, in the fixed display order.
+    const cols = designations
+      .filter((d) => DESIG_CODE[d.name])
+      .sort((a, b) => DESIG_ORDER.indexOf(a.name) - DESIG_ORDER.indexOf(b.name))
+
     const rows = []
-    for (const [instId, reqs] of reqByInstall) {
-      const shortages = []
-      const surpluses = []
-      for (const r of reqs) {
-        const cur = offCount.get(instId + '|' + r.designation_id) ?? 0
-        const v = (r.required_count ?? 0) - cur
-        const name = desigName.get(r.designation_id) ?? '—'
-        if (v > 0) shortages.push({ name, n: v })
-        else if (v < 0) surpluses.push({ name, n: -v })
-      }
-      if (shortages.length === 0 && surpluses.length === 0) continue
-      shortages.sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
-      surpluses.sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
-      rows.push({ installation: installById.get(instId)?.name ?? '—', shortages, surpluses })
+    for (const [instId, reqMap] of reqByInstall) {
+      const cells = cols.map((c) => {
+        const required = reqMap.get(c.id) ?? 0
+        const actual = offCount.get(instId + '|' + c.id) ?? 0
+        return { required, actual, diff: required - actual }
+      })
+      rows.push({ installation: installById.get(instId)?.name ?? '—', cells })
     }
     rows.sort((a, b) => a.installation.localeCompare(b.installation))
-    return { rows, anyConfigured: reqByInstall.size > 0 }
+    return { rows, cols, anyConfigured: reqByInstall.size > 0 }
   }, [requirements, installations, designations, stints])
 
   // Open exposure = unreconciled penalty rows (same rule as the Penalty tracker).
@@ -499,65 +526,47 @@ export default function Dashboard() {
         <span className="muted">unreconciled · tap to review</span>
       </Link>
 
-      {/* Staffing variance */}
+      {/* Staffing variance (collapsible matrix) */}
       <div className="dash-card">
-        <div className="dash-card__head">
+        <button
+          type="button"
+          className="dash-card__head accordion-head"
+          onClick={() => setVarianceOpen((o) => !o)}
+          aria-expanded={varianceOpen}
+        >
           <h3>Staffing variance</h3>
-        </div>
-        {!variance.anyConfigured ? (
-          <p className="muted">Set up staffing requirements in Configuration to see variance.</p>
-        ) : variance.rows.length === 0 ? (
-          <p className="readiness-health readiness-health--ok">All installations fully staffed</p>
-        ) : (
-          <div className="variance-list">
-            {variance.rows.map((r) => (
-              <div className="variance-install" key={r.installation}>
-                <h4 className="variance-install__name">{r.installation}</h4>
-                {r.shortages.map((s, i) => (
-                  <p key={`s${i}`} className="variance-row variance-row--short">
-                    ● Short {s.n} {plural(s.name, s.n)}
-                  </p>
-                ))}
-                {r.surpluses.map((s, i) => (
-                  <p key={`u${i}`} className="variance-row variance-row--surplus">
-                    ● Surplus {s.n} {plural(s.name, s.n)}
-                  </p>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Needs attention */}
-      <div className="dash-card__head dash-attention-head">
-        <h3>Needs attention</h3>
-        <span className="muted">≥ {thresholds.warning} days</span>
-      </div>
-      {needsAttention.length === 0 ? (
-        <p className="muted empty-state">Nobody is at or past the warning day. 👍</p>
-      ) : (
-        <ul className="card-list">
-          {needsAttention.map((s) => (
-            <li key={s.id}>
-              <div className={`roster-card ${s.state.cls}`}>
-                <div className="emp-card__main">
-                  <span className="emp-card__name">{s.employee?.full_name ?? '—'}</span>
-                  <span className="emp-card__meta">
-                    {s.employee?.designation?.name ?? '—'} · 📍 {s.installation?.name ?? '—'}
-                  </span>
-                </div>
-                <div className="roster-card__side">
-                  <span className={`pill ${s.state.cls}`}>{s.state.label}</span>
-                  <span className="roster-card__days">
-                    <strong>{s.days}</strong>d
-                  </span>
-                </div>
-              </div>
-            </li>
+          <span className="accordion-chevron">{varianceOpen ? '▾' : '▸'}</span>
+        </button>
+        {varianceOpen &&
+          (!variance.anyConfigured ? (
+            <p className="muted">Set up staffing requirements in Configuration to see variance.</p>
+          ) : (
+            <div className="variance-matrix-wrap">
+              <table className="variance-matrix">
+                <thead>
+                  <tr>
+                    <th>Installation</th>
+                    {variance.cols.map((c) => (
+                      <th key={c.id} title={c.name}>
+                        {DESIG_CODE[c.name].code} {DESIG_CODE[c.name].emoji}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {variance.rows.map((r) => (
+                    <tr key={r.installation}>
+                      <td className="variance-matrix__inst">{r.installation}</td>
+                      {r.cells.map((cell, i) => (
+                        <td key={i}>{varianceCell(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ))}
-        </ul>
-      )}
+      </div>
 
       <Modal
         open={Boolean(bandModal)}

@@ -18,6 +18,10 @@ export default function Reports() {
   const [dateTo, setDateTo] = useState(todayISO())
   const [status, setStatus] = useState('all')
 
+  // Accordion: only one report card expanded at a time (null = both collapsed).
+  const [openCard, setOpenCard] = useState(null)
+  const toggleCard = (key) => setOpenCard((c) => (c === key ? null : key))
+
   const [count, setCount] = useState(null)
   const [counting, setCounting] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -101,14 +105,22 @@ export default function Reports() {
       </div>
 
       <div className="dash-card">
-        <div className="dash-card__head">
+        <button
+          type="button"
+          className="dash-card__head accordion-head"
+          onClick={() => toggleCard('recon')}
+          aria-expanded={openCard === 'recon'}
+        >
           <h3>Reconciliation Report</h3>
-        </div>
+          <span className="accordion-chevron">{openCard === 'recon' ? '▾' : '▸'}</span>
+        </button>
         <p className="muted">
           One row per signed-off overstay stint — attribution split, ONGC/SKFS penalties, RFM
           trail and a plain-language narrative. For periodic ONGC submission.
         </p>
 
+        {openCard === 'recon' && (
+        <>
         <div className="board-controls roster-filters">
           <label className="field">
             <span>From (sign-off)</span>
@@ -158,17 +170,27 @@ export default function Reports() {
 
         {error && <p className="banner banner--error">{error}</p>}
         {flash && <p className="banner banner--info">{flash}</p>}
+        </>
+        )}
       </div>
 
       <div className="dash-card">
-        <div className="dash-card__head">
+        <button
+          type="button"
+          className="dash-card__head accordion-head"
+          onClick={() => toggleCard('dob')}
+          aria-expanded={openCard === 'dob'}
+        >
           <h3>DOB Mismatch Report</h3>
-        </div>
+          <span className="accordion-chevron">{openCard === 'dob' ? '▾' : '▸'}</span>
+        </button>
         <p className="muted">
           Employees whose date of birth differs across their Aadhaar, PAN and Passport records —
           a data-quality check (includes inactive staff).
         </p>
 
+        {openCard === 'dob' && (
+        <>
         {dobError && <p className="banner banner--error">{dobError}</p>}
         {dobCount === 0 ? (
           <p className="readiness-health readiness-health--ok">No DOB mismatches detected</p>
@@ -190,6 +212,8 @@ export default function Reports() {
           </div>
         )}
         {dobFlash && <p className="banner banner--info">{dobFlash}</p>}
+        </>
+        )}
       </div>
     </section>
   )
