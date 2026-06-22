@@ -115,14 +115,34 @@ export async function computeOverstay(stint, cfg, signOffDate) {
   const pairing = await activeBoardedPairing(employeeId)
 
   if (!pairing) {
-    // No relief was ever boarded — the whole overstay is segment 1, SKFS.
+    // No relief is currently boarded — the whole overstay is segment 1. The
+    // default depends on the most recent attempt for this employee: if relief
+    // was in motion (dropped by ONGC, or still pending/listed), that's an ONGC
+    // delay; otherwise (no attempt, or a no-show) it falls to SKFS.
+    const { data: latestAttempt } = await supabase
+      .from('replacement_pairings')
+      .select('status')
+      .eq('outgoing_employee_id', employeeId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    const latestStatus = latestAttempt?.[0]?.status
+    const seg1Default =
+      latestStatus === 'dropped'
+        ? 'ongc'
+        : latestStatus === 'pending'
+        ? 'ongc'
+        : latestStatus === 'rfm_listed'
+        ? 'ongc'
+        : 'skfs'
+
     return {
       pairingId: null,
       reliefArrival: null,
       hardThreshold,
       seg1Days: Math.max(0, daysBetween(hardThreshold, signOffDate)),
       seg2Days: 0,
-      seg1Default: 'skfs',
+      seg1Default,
       seg2Default: null,
     }
   }
@@ -149,7 +169,9 @@ export async function computeOverstay(stint, cfg, signOffDate) {
     const reqDate = await requestDateForItem(pairing.manifest_request_item_id)
     if (reqDate) {
       const daysAtRequest = daysInclusive(signOn, reqDate)
-      seg1Default = daysAtRequest >= cfg.min && daysAtRequest <= cfg.warning ? 'ongc' : 'skfs'
+      // Filed on time (day 56–69) → ONGC default; day 70+ (late) → SKFS.
+      // Using < cfg.max keeps this correct if max_service_days is reconfigured.
+      seg1Default = daysAtRequest >= cfg.min && daysAtRequest < cfg.max ? 'ongc' : 'skfs'
     } else {
       // Manual / ad-hoc first attempt with no request to check — default SKFS.
       seg1Default = 'skfs'
