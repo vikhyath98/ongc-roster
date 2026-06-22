@@ -51,7 +51,7 @@ const HEADER_SYNONYMS = {
   phone: ['phone', 'mobile', 'contact', 'phone number', 'mobile number', 'phoneno'],
   employment_status: ['employment_status', 'employment status', 'status'],
   base_location_type: ['base_location_type', 'base location type', 'location type', 'base location'],
-  recall_lead_time_days: ['recall_lead_time_days', 'recall lead time', 'recall days', 'recall lead time days'],
+  recall_lead_time_days: ['recall_lead_time_days', 'recall lead time', 'recall days', 'recall lead time days', 'recall lead time (days)'],
   notes: ['notes', 'note', 'remark', 'remarks'],
   current_location: ['current_location', 'current location', 'location', 'installation', 'posting', 'site', 'platform rig'],
   current_sign_on: ['current_sign_on', 'current sign on', 'sign_on_date', 'sign on date', 'signon date', 'sign on', 'onboard date', 'boarding date', 'date of boarding'],
@@ -66,7 +66,13 @@ const HEADER_SYNONYMS = {
   stint_3_sign_off: ['stint_3_sign_off', 'stint 3 sign off'],
 }
 
-const normalize = (s) => String(s ?? '').trim().toLowerCase().replace(/[\s._-]+/g, ' ').trim()
+const normalize = (s) =>
+  String(s ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[()]/g, '')
+    .replace(/[\s._-]+/g, ' ')
+    .trim()
 
 // Pre-normalise the synonyms so matching is case-insensitive, whitespace-
 // trimmed, and separator-agnostic ("emp_id", "Emp ID", "empid" all match).
