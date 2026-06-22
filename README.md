@@ -1,14 +1,23 @@
 # ONGC Offshore Workforce Rotation System
 
 A mobile-first PWA that replaces the legacy Excel workbook for staffing 14 ONGC
-offshore installations. See [`SPEC.md`](./SPEC.md) — the source of truth for the
-build.
+offshore installations (8 platforms + 6 rigs, ~290 required positions). A manager
+can run the daily rotation job from a phone on site: see who is due to rotate off,
+find a confirmed replacement from base, run the real ONGC manifestation paperwork
+(request → RFM → boarding outcome), and produce defensible evidence when a penalty
+has to be reconciled with ONGC.
+
+See [`SPEC.md`](./SPEC.md) — the source of truth for the build.
+
+**Live:** https://skfs-ongc-roster.vercel.app (auto-deploys on push to `main`).
 
 ## Tech stack
 
 - **Frontend:** React + Vite, mobile-first, installable PWA (`vite-plugin-pwa`)
 - **Backend / auth / DB:** Supabase (PostgreSQL, Auth, Realtime)
 - **Hosting:** Vercel (free tier)
+- **Scale:** up to ~10 trusted internal managers. RLS = any authenticated user can
+  read/write all tables (per-installation scoping is deferred).
 
 ## Getting started
 
@@ -37,17 +46,38 @@ npm run build
 npm run preview
 ```
 
-## Build progress (per SPEC.md §7)
+## Database
 
-- [x] **1. Scaffold** — Vite + React PWA, Supabase client, auth shell, bottom nav (8 modules)
-- [x] **2. Supabase migration + seed** — `supabase/migrations/0001_init.sql` + `supabase/seed.sql` (see `supabase/README.md` to apply)
-- [x] **3. Email auth + `app_users` linkage** — login wired (step 1), `app_users` auto-created via DB trigger + client upsert; RLS = authenticated full access
-- [x] **4. Employee management** — searchable list, add/edit, document checklist + cert-current (§6.4), `.xlsx` bulk import with validated preview
-- [x] **5. Boarding flow** — batch onboard/offboard on a shared transport date (§5.4, §6.1)
-- [x] **6. Active roster** — grouped by installation, days served + colour states (§6.2), filter by installation & designation
-- [x] **7. Replacement finder + reserve pool** — strict reserve pool (§3.4); ranked same-designation candidates with call/confirm lifecycle (§6.5/§6.6)
-- [x] **8. Penalty tracker** — live exposure from the penalty view; unreconciled vs reconciled; remark-required reconcile (§5.7, §6.7)
-- [x] **9. Configuration** — thresholds/rates, installations (active toggle), designations, document types (+ mapping), installation requirements (§5.8); plus read-only rotation history on the employee detail
-- [x] **10. Dashboard** — headcount, rotation-window bands, open penalty exposure, needs-attention list (§5.1)
-- [x] **11a. PWA polish** — PNG 192/512 + maskable + apple-touch icons; offline read-only (NetworkFirst cache of Supabase GETs)
-- [ ] 11b. Vercel deploy (connect repo + env vars)
+Migrations and seed data live in [`supabase/`](./supabase/) (see its README to
+apply them). The schema is migrations `0001`–`0007`: the v1 core (employees,
+designations, installations, rotation log, availability, penalties, config) plus
+the manifestation system (manifest requests/items, RFMs + line items, replacement
+pairings, overstay attributions, understay records).
+
+## App structure
+
+Navigation is a 4-item bottom nav — **Home · Roster · Board · Penalty** — with a
+top-right hamburger drawer for Employee Master, Configuration, Reports, and sign-out.
+
+- **Home (Dashboard)** — headcount, rotation-window bands (with per-designation
+  breakdown), reserve readiness + pipeline health, open penalty exposure,
+  collapsible manifest alerts, and a collapsible staffing-variance matrix.
+- **Roster** — two-tab operational hub: *Offshore* (flat, urgency-sorted, with a
+  per-card Find Replacement sheet) and *Base staff* (the reserve pool with
+  eligibility / confirmation / call state, location-type filters, and bulk confirm).
+- **Board** — the manifestation pipeline: *Manifest* (requests → RFMs with
+  three-state boarding outcomes) and *Offboard* (closes stints, with understay and
+  two-segment overstay attribution).
+- **Penalty** — live exposure, unreconciled vs reconciled, remark-required
+  reconcile, and per-stint "View evidence".
+- **Employee Master** — desktop-first dense table with detail panel, document
+  checklist + cert-current/DOB-mismatch flags, rotation history, and `.xlsx`
+  import/export with a validated preview.
+- **Reports** — Reconciliation Report and DOB Mismatch Report (downloadable `.xlsx`).
+
+## Status
+
+The v1 build (SPEC.md §§1–9), the post-v1 refinement pass (§§10–13: navigation
+restructure, Employee Master, real seed data), and the full manifestation /
+RFM / pairing / attribution system (§14, workstreams A–H) are all built, deployed,
+and live. Remaining open and deferred items are tracked in SPEC.md §§15–16.
