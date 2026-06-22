@@ -71,7 +71,7 @@ const normalize = (s) =>
     .trim()
     .toLowerCase()
     .replace(/[()]/g, '')
-    .replace(/[\s._-]+/g, ' ')
+    .replace(/[–—\s._-]+/g, ' ')
     .trim()
 
 // Pre-normalise the synonyms so matching is case-insensitive, whitespace-
