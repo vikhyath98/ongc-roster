@@ -5,6 +5,8 @@ import {
   downloadReconciliationXlsx,
   getDobMismatchData,
   downloadDobMismatchXlsx,
+  getCallPerformanceData,
+  downloadCallPerformanceXlsx,
 } from '../lib/reports'
 import { todayISO, addDays } from '../lib/dates'
 
@@ -33,6 +35,12 @@ export default function Reports() {
   const [dobDownloading, setDobDownloading] = useState(false)
   const [dobError, setDobError] = useState('')
   const [dobFlash, setDobFlash] = useState('')
+
+  // Call Performance Report
+  const [callCount, setCallCount] = useState(null) // employees with ≥1 call in 12 mo
+  const [callDownloading, setCallDownloading] = useState(false)
+  const [callError, setCallError] = useState('')
+  const [callFlash, setCallFlash] = useState('')
 
   const filters = () => ({
     installationId: installationId || undefined,
@@ -65,8 +73,25 @@ export default function Reports() {
       if (res.error) setDobError(res.error.message)
       else setDobCount(res.rows.length)
     })
+    getCallPerformanceData().then((res) => {
+      if (res.error) setCallError(res.error.message)
+      else setCallCount(res.rows.filter((r) => r.total_calls > 0).length)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  async function downloadCallPerf() {
+    setCallDownloading(true)
+    setCallError('')
+    setCallFlash('')
+    const res = await downloadCallPerformanceXlsx()
+    setCallDownloading(false)
+    if (res.error) {
+      setCallError(res.error.message)
+      return
+    }
+    setCallFlash(`Downloaded ${res.count} employee${res.count === 1 ? '' : 's'}.`)
+  }
 
   async function downloadDob() {
     setDobDownloading(true)
@@ -212,6 +237,48 @@ export default function Reports() {
           </div>
         )}
         {dobFlash && <p className="banner banner--info">{dobFlash}</p>}
+        </>
+        )}
+      </div>
+
+      <div className="dash-card">
+        <button
+          type="button"
+          className="dash-card__head accordion-head"
+          onClick={() => toggleCard('callperf')}
+          aria-expanded={openCard === 'callperf'}
+        >
+          <h3>Call Performance Report</h3>
+          <span className="accordion-chevron">{openCard === 'callperf' ? '▾' : '▸'}</span>
+        </button>
+        <p className="muted">
+          Per base employee over the last 12 months — calls to confirm, no-shows, on-time
+          arrival rate and average rest days between stints.
+        </p>
+
+        {openCard === 'callperf' && (
+        <>
+        {callError && <p className="banner banner--error">{callError}</p>}
+        {callCount === 0 ? (
+          <p className="muted">No call activity recorded in the last 12 months.</p>
+        ) : (
+          <div className="reports-actions">
+            <span className="muted">
+              {callCount == null
+                ? 'Checking…'
+                : `${callCount} employee${callCount === 1 ? '' : 's'} called in the last 12 months`}
+            </span>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={downloadCallPerf}
+              disabled={callDownloading || !callCount}
+            >
+              {callDownloading ? 'Preparing…' : 'Download .xlsx'}
+            </button>
+          </div>
+        )}
+        {callFlash && <p className="banner banner--info">{callFlash}</p>}
         </>
         )}
       </div>

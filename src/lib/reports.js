@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { todayISO } from './dates'
+import { todayISO, addDays, daysBetween } from './dates'
 import { listEmployees } from './employees'
 import { listAllEmployeeDocuments, listDocumentTypes, dobMismatch } from './documents'
 
@@ -333,5 +333,139 @@ export async function downloadDobMismatchXlsx() {
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'DOB Mismatch')
   XLSX.writeFile(wb, `dob_mismatch_report_${todayISO()}.xlsx`)
+  return { count: res.rows.length, error: null }
+}
+
+// ---------------------------------------------------------------------
+// Call Performance Report (Workstream L)
+// Per active on-base employee, over the last 365 days: call volume, confirmed
+// calls, no-shows (from RFM line items), on-time arrival rate, and average rest
+// days between stints. Decisions locked in §17.L.
+// ---------------------------------------------------------------------
+
+const BASE_LOCATION_LABEL = { guesthouse: 'Guesthouse', hometown: 'Out of town' }
+
+function groupByKey(rows, key) {
+  const m = new Map()
+  for (const r of rows ?? []) {
+    if (!m.has(r[key])) m.set(r[key], [])
+    m.get(r[key]).push(r)
+  }
+  return m
+}
+
+export async function getCallPerformanceData() {
+  const cutoff = addDays(todayISO(), -365)
+
+  const empRes = await listEmployees()
+  if (empRes.error) return { error: empRes.error }
+  const base = (empRes.data ?? []).filter(
+    (e) => e.employment_status === 'active' && !e.current_installation_id
+  )
+  if (base.length === 0) return { rows: [], error: null }
+  const ids = base.map((e) => e.id)
+
+  const [callRes, rotRes, nsRes] = await Promise.all([
+    supabase
+      .from('call_log')
+      .select('employee_id,outcome,commitment_date,called_at')
+      .in('employee_id', ids)
+      .gte('called_at', cutoff),
+    supabase
+      .from('rotation_log')
+      .select('employee_id,sign_on_date,sign_off_date')
+      .in('employee_id', ids)
+      .order('sign_on_date'),
+    supabase
+      .from('rfm_line_items')
+      .select('employee_id,outcome,outcome_recorded_at')
+      .eq('outcome', 'no_show')
+      .gte('outcome_recorded_at', cutoff)
+      .in('employee_id', ids),
+  ])
+  const err = callRes.error || rotRes.error || nsRes.error
+  if (err) return { error: err }
+
+  const callsByEmp = groupByKey(callRes.data, 'employee_id')
+  const rotByEmp = groupByKey(rotRes.data, 'employee_id')
+  const noShowByEmp = groupByKey(nsRes.data, 'employee_id')
+
+  const rows = base.map((e) => {
+    const calls = callsByEmp.get(e.id) ?? []
+    const rots = (rotByEmp.get(e.id) ?? [])
+      .slice()
+      .sort((a, b) => (a.sign_on_date ?? '').localeCompare(b.sign_on_date ?? ''))
+    const signOns = rots.map((r) => r.sign_on_date).filter(Boolean)
+
+    const totalCalls = calls.length
+    const confirmedCalls = calls.filter((c) => c.outcome === 'confirmed').length
+    const noShows = (noShowByEmp.get(e.id) ?? []).length
+
+    // On-time rate: among confirmed calls that have a commitment date, pair each
+    // with the nearest stint that started on/after the call; on-time if that
+    // sign-on falls within 30 days of the commitment date. Confirmed calls with
+    // no commitment date are excluded from the rate entirely.
+    const eligible = calls.filter((c) => c.outcome === 'confirmed' && c.commitment_date)
+    let onTime = 0
+    for (const c of eligible) {
+      const callDate = (c.called_at ?? '').slice(0, 10)
+      const nextSignOn = signOns.find((d) => d >= callDate)
+      if (nextSignOn && nextSignOn <= addDays(c.commitment_date, 30)) onTime++
+    }
+    const onTimeRate = eligible.length ? Math.round((onTime / eligible.length) * 100) : null
+
+    // Avg rest days: average gap between a stint's sign-off and the next sign-on.
+    const gaps = []
+    for (let i = 1; i < rots.length; i++) {
+      const prevOff = rots[i - 1].sign_off_date
+      const nextOn = rots[i].sign_on_date
+      if (prevOff && nextOn) gaps.push(daysBetween(prevOff, nextOn))
+    }
+    const avgRest =
+      rots.length >= 2 && gaps.length
+        ? Math.round(gaps.reduce((s, g) => s + g, 0) / gaps.length)
+        : null
+
+    return {
+      emp_id: e.emp_id,
+      full_name: e.full_name,
+      designation_name: e.designation?.name ?? '',
+      base_location: BASE_LOCATION_LABEL[e.base_location_type] ?? '',
+      total_calls: totalCalls,
+      confirmed_calls: confirmedCalls,
+      no_shows: noShows,
+      on_time_rate: onTimeRate,
+      avg_rest_days: avgRest,
+    }
+  })
+
+  rows.sort((a, b) => b.total_calls - a.total_calls)
+  return { rows, error: null }
+}
+
+const CALLPERF_HEADERS = [
+  'Emp ID', 'Full Name', 'Designation', 'Base Location Type',
+  'Total Calls (12 mo)', 'Confirmed Calls', 'No-shows (12 mo)',
+  'On-time Rate (%)', 'Avg Rest Days Between Stints',
+]
+
+export async function downloadCallPerformanceXlsx() {
+  const res = await getCallPerformanceData()
+  if (res.error) return { error: res.error }
+
+  const XLSX = await loadXLSX()
+  const aoa = [CALLPERF_HEADERS]
+  for (const r of res.rows) {
+    aoa.push([
+      r.emp_id, r.full_name, r.designation_name, r.base_location,
+      r.total_calls, r.confirmed_calls, r.no_shows,
+      r.on_time_rate == null ? '' : r.on_time_rate,
+      r.avg_rest_days == null ? '' : r.avg_rest_days,
+    ])
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Call Performance')
+  XLSX.writeFile(wb, `call_performance_report_${todayISO()}.xlsx`)
   return { count: res.rows.length, error: null }
 }
