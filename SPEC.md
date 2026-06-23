@@ -415,4 +415,147 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 - Push/SMS alerts (in-app alerts only for now).
 - "Any-of group" document requirements (the OR documents remain a single combined row).
 - Structured field-grouping logic beyond the optional label noted in §15.
-- Anything not explicitly listed in §14.9 as pending.
+- Anything not explicitly listed in §14.9 as pending (except the Phase 3 workstreams now scoped in §17).
+
+---
+
+## 17. Phase 3 — Workstreams I–O
+
+> **Spec only — nothing in this section is built yet.** This phase layers
+> cross-tier replacement, a NEDP attribute, a status-column board, a structured
+> call log, a role system, the CM return-manifest workflow, and a read-only ONGC
+> Head view on top of the feature-complete §14 system. Build order is at the end.
+>
+> **Numbering note:** the owner's request labelled this "§15 Phase 3"; since §15
+> (Open items) and §16 (Deferred) already exist, it is filed here as §17 to avoid a
+> duplicate section number. Renumber later if preferred.
+
+### 17.I — Cross-designation replacement (logic only, no migration)
+
+Generalises the §14.2 designation-matching rule from "exact match, with an
+Unskilled-to-Unskilled exception" to a **skill-tier compatibility** model.
+
+- `reserve.js` → `listOnBaseEmployees` must include `skill_category` via the
+  designation → category join (no new column; `categories.name` already exists).
+- The outgoing employee's `skill_category` must be passed into the replacement
+  finder so the check can compare tiers.
+- Tier compatibility (incoming **can replace** outgoing):
+  - **Skilled** → Skilled / Semi-skilled / Unskilled
+  - **Semi-skilled** → Semi-skilled / Unskilled
+  - **Unskilled** → Unskilled only
+  - **Outsourced** → Outsourced only
+- **Hard block** for any downward violation (e.g. Unskilled replacing Skilled) —
+  same blocking treatment as the current designation-mismatch block.
+- **Non-blocking warning** for a same-tier cross-designation replacement (e.g.
+  Electrician replacing Cook — both Semi-skilled), mirroring the existing
+  Unskilled cross-replacement warning.
+- Exact same-designation matches still pass silently.
+
+### 17.J — NEDP pass
+
+NEDP is modelled as a **first-class employee attribute** (like `emp_id`), not a
+document record.
+
+- **Schema (employees table):**
+  - `nedp_number text UNIQUE nullable`
+  - `nedp_valid_until date nullable`
+- **Config:** `nedp_validity_days` (default `365`) in `app_config`, editable in the
+  Configuration screen.
+- **UI:**
+  - `EmployeeForm`: `nedp_number` text input + `nedp_valid_until` date picker.
+  - Employee card / detail: NEDP status pill — **OK / Expiring / Expired / Not set**.
+  - Find Replacement: an **expired** NEDP is a **block** (same treatment as an
+    expired cert). NEDP **expiring within 30 days** is a **non-blocking warning**.
+
+### 17.K — Board screen → Flow B (status columns)
+
+Replace the **Manifest** tab in `Boarding.jsx` with a status-column (kanban-style)
+view. The **Offboard** tab is unchanged.
+
+- **Columns:**
+  - **Needs manifest** — offshore, past `warning_day`, with no `manifest_request_item`
+    naming them.
+  - **Filed / RFM** — a manifest request exists, awaiting or received RFM, not yet
+    boarded.
+  - **Boarded** — replacement boarded this cycle.
+  - **Retry needed** — latest pairing is `dropped`/`no_show` with no boarded successor.
+- Each column lists employee cards with key info: name, designation, installation,
+  days served.
+- **Batch select + batch action per column:**
+  - Needs manifest → **Create manifest request**
+  - Retry needed → **Create retry manifest request**
+- **CM view (toggle):** scoped to **return manifests only** (see §17.N).
+
+### 17.L — Call log
+
+> **Conflict to resolve before build:** `call_log` is already an existing v1 table
+> (§3.6, §4) holding the current `call_count`/`last_call_*` tracking. The schema
+> below redefines it. Either migrate/extend the existing table or pick a new name
+> (e.g. `call_records`) before building — do not silently create a second table.
+
+- **Schema (`call_log`):**
+  - `id uuid PK`
+  - `employee_id uuid → employees FK cascade`
+  - `called_by uuid → app_users FK nullable`
+  - `called_at timestamptz NOT NULL DEFAULT now()`
+  - `outcome text nullable CHECK IN (confirmed, declined, callback, no_answer, unreachable)`
+  - `commitment_date date nullable`
+  - `hometown text nullable`
+  - `travel_days smallint nullable CHECK >= 0`
+  - `notes text nullable`
+  - Index: `(employee_id, called_at DESC)`
+- **Model A flow:** tapping **"Call…"** in Find Replacement creates a `call_log` row
+  immediately (`called_at = now`, `outcome = null`). An inline outcome picker then
+  appears: confirmed / declined / callback / no answer / unreachable. If
+  **confirmed**, it also surfaces `commitment_date`, `hometown`, `travel_days`
+  (all optional). The manager can update these without leaving the sheet.
+- **"Check history"** button on each base candidate card: a collapsible panel of past
+  `call_log` entries for that employee, most recent first, grouped by rest period.
+  Collapsed by default.
+- **Ranked report card** in Reports: per base employee, over the last 12 months —
+  total calls to confirm, no-shows, on-time arrival rate (`commitment_date` vs actual
+  `sign_on` from `rotation_log`), and avg rest days between stints. Sortable columns,
+  download `.xlsx`.
+
+### 17.M — Role system (prerequisite for N and O)
+
+Three roles plus the existing Admin; role stored on `app_users`; UI gates by role.
+
+- **Admin** (existing) — retains full access.
+- **hr_manager** — all current screens **except** the CM view.
+- **catering_manager** — **CM view only**: return manifests for their installation,
+  read-only roster for their installation; no penalty / reports / Employee Master
+  edit access.
+- **ongc_head** — **ONGC Head view only** (read-only).
+
+### 17.N — Return manifest (CM workflow)
+
+The primary **Segment 2 prevention** mechanism (return transport after relief arrives).
+
+- **Trigger:** when an incoming replacement's RFM line is logged **Boarded**, a
+  `return_manifest_task` is created for the **outgoing** employee:
+  - `deadline = Boarded_date + 1 day at 12:00 IST`
+  - `status = pending`
+- The CM sees these tasks in their view (§17.K CM toggle). **Actions:** *File return
+  manifest* (logs the ONGC return RFM number + sortie date) or *Mark as submitted*
+  with a reason.
+- **Missed deadline** (past 12:00 the next day, still pending):
+  - An alert fires to **hr_manager** on the Dashboard.
+  - The CM must submit a reason before the task can be closed.
+
+### 17.O — ONGC Head view
+
+Read-only dashboard. A grid of **14 installation cards**.
+
+- **Each card:** installation name, persons on board, days-served distribution
+  (green / amber / red counts), open penalty exposure for that installation, and
+  expected dispute amount (ONGC-attributed days × rate).
+- **Drill-down (tap a card):** list of employees at that installation with days served
+  and manifest status.
+- **No actions. No employee PII beyond name and days served.**
+
+### 17.x — Build order & deferrals
+
+- **Order:** I → J → L → K → M → N → O.
+- **P — File upload — deferred.** Needs a Supabase Storage bucket provisioned
+  separately from the app build.
