@@ -421,10 +421,11 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 
 ## 17. Phase 3 — Workstreams I–O
 
-> **Spec only — nothing in this section is built yet.** This phase layers
-> cross-tier replacement, a NEDP attribute, a status-column board, a structured
-> call log, a role system, the CM return-manifest workflow, and a read-only ONGC
-> Head view on top of the feature-complete §14 system. Build order is at the end.
+> **Status:** Workstreams **I and J are built, tested, and pushed** (details in
+> each subsection); **K–O remain spec-only.** This phase layers cross-tier
+> replacement, a NEDP attribute, a status-column board, a structured call log, a
+> role system, the CM return-manifest workflow, and a read-only ONGC Head view on
+> top of the feature-complete §14 system. Build order is at the end.
 >
 > **Numbering note:** the owner's request labelled this "§15 Phase 3"; since §15
 > (Open items) and §16 (Deferred) already exist, it is filed here as §17 to avoid a
@@ -451,6 +452,10 @@ Unskilled-to-Unskilled exception" to a **skill-tier compatibility** model.
   Unskilled cross-replacement warning.
 - Exact same-designation matches still pass silently.
 
+**Status: BUILT, TESTED, AND PUSHED** (commit `8a263ef`; the manifest
+`LineItemPicker` was synced to the same tier rule and candidate designation is now
+shown in `ReplaceSheet` in `2dc410c`).
+
 ### 17.J — NEDP pass
 
 NEDP is modelled as a **first-class employee attribute** (like `emp_id`), not a
@@ -466,6 +471,14 @@ document record.
   - Employee card / detail: NEDP status pill — **OK / Expiring / Expired / Not set**.
   - Find Replacement: an **expired** NEDP is a **block** (same treatment as an
     expired cert). NEDP **expiring within 30 days** is a **non-blocking warning**.
+
+**Status: BUILT, TESTED, AND PUSHED** (commits `c5a6c4b` schema + `nedp_validity_days`
+config key, `438190c` form fields / status pill / eligibility gate). Two items deferred:
+- The **"NEDP expiring" non-blocking warning on Find Replacement candidate cards** is
+  **deferred to Workstream K**. Expired NEDP already blocks in the finder; the expiring
+  warning is currently surfaced via the amber pill on the Employee Master card/detail.
+- `nedp_validity_days` is **readable but not yet editable in the Configuration screen**
+  (exposed via `config.js` defaults; the Configuration UI editor is a follow-up).
 
 ### 17.K — Board screen → Flow B (status columns)
 
