@@ -4,7 +4,7 @@ import { supabase } from './supabase'
 // (if any) current installation for display.
 const SELECT =
   'id,emp_id,full_name,phone,employment_status,notes,designation_id,current_installation_id,' +
-  'base_location_type,recall_lead_time_days,' +
+  'base_location_type,recall_lead_time_days,nedp_number,nedp_valid_until,' +
   'designation:designations(id,name,category:categories(id,name)),' +
   'installation:installations(id,name,type)'
 
@@ -131,6 +131,8 @@ function toRow(input) {
       input.recall_lead_time_days === '' || input.recall_lead_time_days == null
         ? null
         : Number(input.recall_lead_time_days),
+    nedp_number: input.nedp_number?.trim() || null,
+    nedp_valid_until: input.nedp_valid_until || null,
   }
 }
 

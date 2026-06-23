@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { computeCertStatus, listDocumentTypes, listAllEmployeeDocuments } from './documents'
 import { getAppConfig, configInt } from './config'
 import { daysBetween, todayISO } from './dates'
+import { nedpStatus } from './nedp'
 
 // Reserve pool + replacement finder logic (SPEC.md §3.4, §6.3, §6.5, §6.6).
 //
@@ -46,7 +47,7 @@ export async function listOnBaseEmployees() {
     .from('employees')
     .select(
       'id,emp_id,full_name,phone,designation_id,employment_status,current_installation_id,' +
-        'base_location_type,recall_lead_time_days,' +
+        'base_location_type,recall_lead_time_days,nedp_number,nedp_valid_until,' +
         'designation:designations(id,name,category:categories(name))'
     )
     .is('current_installation_id', null)
@@ -138,9 +139,21 @@ export function buildBaseCandidates(base, docTypes, docsByEmp, avByEmp, lastOffM
   return (base ?? []).map((e) => {
     const cert = computeCertStatus(e.designation_id, docTypes, docsByEmp.get(e.id) ?? [], today)
     const rest = restDaysFor(e.id, lastOffMap, today)
-    const eligible = rest === null || rest >= minRest
+    // An expired NEDP blocks deployment the same way an expired cert does, so it
+    // folds into `eligible` (which all consumers — finder, reserve pool, the
+    // dashboard counts — already gate on). A missing NEDP is not blocking.
+    const nedp = nedpStatus(e.nedp_valid_until, today)
+    const eligible = (rest === null || rest >= minRest) && nedp !== 'expired'
     const av = avByEmp.get(e.id) ?? null
-    return { ...e, cert, restDays: rest, eligible, availability: av, liveConfirmed: isConfirmedLive(av) }
+    return {
+      ...e,
+      cert,
+      restDays: rest,
+      nedpStatus: nedp,
+      eligible,
+      availability: av,
+      liveConfirmed: isConfirmedLive(av),
+    }
   })
 }
 
@@ -189,8 +202,8 @@ export function rankReplacementCandidates(candidates, outgoingCategory) {
 }
 
 // Display status for a candidate: the single most important reason they are
-// (or aren't) deployable. Order of precedence: inactive > cert > declined >
-// resting > eligible. Used by the Base-staff list and the replacement finder.
+// (or aren't) deployable. Order of precedence: inactive > cert > NEDP > declined
+// > resting > eligible. Used by the Base-staff list and the replacement finder.
 export function candidateStatus(c) {
   if (c.employment_status === 'inactive') {
     return { key: 'inactive', label: 'Inactive', reason: 'Inactive — set active to use', blocked: true }
@@ -198,6 +211,9 @@ export function candidateStatus(c) {
   if (!c.cert?.certCurrent) {
     const names = (c.cert?.problems ?? []).map((p) => `${p.name} (${p.reason})`).join(', ')
     return { key: 'cert', label: 'Cert issue', reason: names || 'Certificate issue', blocked: true }
+  }
+  if (c.nedpStatus === 'expired') {
+    return { key: 'nedp', label: 'NEDP expired', reason: 'NEDP expired', blocked: true }
   }
   if (!c.liveConfirmed && c.availability?.last_call_outcome === 'declined') {
     return { key: 'declined', label: 'Declined', reason: 'Declined on last call', blocked: true }

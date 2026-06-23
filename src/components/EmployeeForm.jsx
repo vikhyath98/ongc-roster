@@ -13,6 +13,8 @@ const EMPTY = {
   notes: '',
   base_location_type: '', // '' = not specified → null on save
   recall_lead_time_days: '', // '' → null on save
+  nedp_number: '', // '' → null on save
+  nedp_valid_until: '', // '' → null on save
   location_id: '', // '' = on base
   sign_on_date: '',
 }
@@ -50,6 +52,8 @@ export default function EmployeeForm({
             notes: employee.notes ?? '',
             base_location_type: employee.base_location_type ?? '',
             recall_lead_time_days: employee.recall_lead_time_days ?? '',
+            nedp_number: employee.nedp_number ?? '',
+            nedp_valid_until: employee.nedp_valid_until ?? '',
             location_id: employee.current_installation_id ?? '',
             sign_on_date: todayISO(),
           }
@@ -227,6 +231,21 @@ export default function EmployeeForm({
             value={form.recall_lead_time_days}
             onChange={set('recall_lead_time_days')}
           />
+        </label>
+
+        <label className="field">
+          <span>NEDP number</span>
+          <input
+            value={form.nedp_number}
+            onChange={set('nedp_number')}
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </label>
+
+        <label className="field">
+          <span>NEDP valid until</span>
+          <input type="date" value={form.nedp_valid_until} onChange={set('nedp_valid_until')} />
         </label>
 
         <label className="field">

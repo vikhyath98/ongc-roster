@@ -3,6 +3,7 @@ import { listEmployees } from '../lib/employees'
 import { listDesignations, listInstallations } from '../lib/reference'
 import { listDocumentTypes, listAllEmployeeDocuments, computeCertStatus, dobMismatch } from '../lib/documents'
 import { baseLocationTag } from '../lib/location'
+import { nedpStatus, NEDP_PILL } from '../lib/nedp'
 import { getAppConfig, configInt } from '../lib/config'
 import EmployeeForm from '../components/EmployeeForm'
 import EmployeeDetail from '../components/EmployeeDetail'
@@ -204,6 +205,7 @@ export default function Employees() {
                 const empDocs = docsByEmployee.get(e.id) ?? []
                 const cert = computeCertStatus(e.designation_id, docTypes, empDocs)
                 const dob = dobMismatch(empDocs, docTypes)
+                const nedp = NEDP_PILL[nedpStatus(e.nedp_valid_until)]
                 const isSel = selectedIds.has(e.id)
                 return (
                   <li key={e.id}>
@@ -239,6 +241,7 @@ export default function Employees() {
                           {cert.certCurrent ? 'Certs OK' : `${cert.problems.length} cert issue${cert.problems.length === 1 ? '' : 's'}`}
                         </span>
                         {dob.mismatch && <span className="pill pill--warn">⚠️ DOB mismatch</span>}
+                        {nedp && <span className={`pill ${nedp.cls}`}>{nedp.label}</span>}
                         <span className="pill">
                           {e.installation ? `📍 ${e.installation.name}` : 'On base'}
                         </span>

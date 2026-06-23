@@ -9,6 +9,7 @@ export const CONFIG_DEFAULTS = {
   max_service_days: 70,
   penalty_rate: 1000,
   confirmation_validity_days: 14,
+  nedp_validity_days: 365,
 }
 
 export async function getAppConfig() {

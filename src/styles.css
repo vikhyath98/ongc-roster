@@ -651,6 +651,10 @@ code {
   font-weight: 500;
 }
 
+.detail-meta__pill {
+  margin-left: 8px;
+}
+
 .detail-notes {
   margin: 12px 0 0;
   font-size: 0.9rem;

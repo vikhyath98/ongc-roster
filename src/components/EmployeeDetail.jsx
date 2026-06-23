@@ -4,6 +4,7 @@ import EmployeeDocChecklist from './EmployeeDocChecklist'
 import RotationHistory from './RotationHistory'
 import { computeCertStatus } from '../lib/documents'
 import { baseLocationTag } from '../lib/location'
+import { nedpStatus, NEDP_PILL } from '../lib/nedp'
 import { useAuth } from '../context/AuthContext'
 import { employeeRotationCount, setEmploymentStatus, deleteEmployee } from '../lib/employees'
 
@@ -55,6 +56,7 @@ export default function EmployeeDetail({
   if (!employee) return null
 
   const cert = computeCertStatus(employee.designation_id, docTypes, employeeDocs)
+  const nedp = NEDP_PILL[nedpStatus(employee.nedp_valid_until)]
   const isActive = employee.employment_status === 'active'
   const hasHistory = rotationCount !== null && rotationCount > 0
   const canDelete = rotationCount === 0 // strictly no rotation history
@@ -143,6 +145,15 @@ export default function EmployeeDetail({
           <div>
             <span className="detail-meta__label">Base location</span>
             <span className="detail-meta__value">{baseLocationTag(employee)}</span>
+          </div>
+        )}
+        {(employee.nedp_number || nedp) && (
+          <div>
+            <span className="detail-meta__label">NEDP</span>
+            <span className="detail-meta__value">
+              {employee.nedp_number ? `No. ${employee.nedp_number}` : '—'}
+              {nedp && <span className={`pill ${nedp.cls} detail-meta__pill`}>{nedp.label}</span>}
+            </span>
           </div>
         )}
       </div>
