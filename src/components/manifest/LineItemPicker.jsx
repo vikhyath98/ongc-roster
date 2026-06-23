@@ -2,6 +2,16 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { daysInclusive } from '../../lib/dates'
 
+// Skill-tier compatibility (SPEC.md §17.I), kept in sync with reserve.js:
+// a candidate can fill an outgoing role only if their tier is >= the outgoing's.
+const SKILL_TIER = {
+  skilled: 3,
+  'semi-skilled': 2,
+  unskilled: 1,
+  outsourced: 0,
+}
+const tierOf = (cat) => SKILL_TIER[(cat ?? '').toLowerCase()] ?? 1
+
 // Shared "add a relief line item" sub-form, used by the new-request form, the
 // request detail (add to existing), and the ad-hoc RFM add flow. Enforces the
 // confirmed-only incoming picker, the optional offshore "replacing" field with
@@ -78,20 +88,29 @@ export default function LineItemPicker({
   const incomingDesig = incoming?.designation
   const outgoingDesig = replacingStint?.employee?.designation
 
-  // Exact match passes silently; same-Unskilled-category mismatch warns; any
-  // other mismatch (Skilled / Semi-skilled / Outsourced, or cross-category)
-  // is a hard block.
+  // Skill-tier replacement rule (SPEC.md §17.I), in sync with reserve.js: exact
+  // designation passes silently; a higher/equal tier cross-designation warns; a
+  // lower tier is a hard block, and an Outsourced role is a closed group (only
+  // another Outsourced can fill it).
   let desigBlock = null
   let desigWarn = null
-  if (incoming && replacingStint && incomingDesig?.id && outgoingDesig?.id) {
-    if (incomingDesig.id !== outgoingDesig.id) {
-      const inCat = catByDesig.get(incomingDesig.id)
-      const outCat = catByDesig.get(outgoingDesig.id)
-      if (inCat && inCat === outCat && outCat === 'Unskilled') {
-        desigWarn = `⚠️ ${incomingDesig.name} is replacing ${outgoingDesig.name} — different roles, please confirm this is intended.`
-      } else {
+  if (
+    incoming &&
+    replacingStint &&
+    incomingDesig?.id &&
+    outgoingDesig?.id &&
+    incomingDesig.id !== outgoingDesig.id
+  ) {
+    const inCat = catByDesig.get(incomingDesig.id)
+    const outCat = catByDesig.get(outgoingDesig.id)
+    const outLower = (outCat ?? '').toLowerCase()
+    if (outLower === 'outsourced') {
+      if ((inCat ?? '').toLowerCase() !== 'outsourced')
         desigBlock = `${outgoingDesig.name} can only be replaced by another ${outgoingDesig.name}.`
-      }
+    } else if (tierOf(inCat) < tierOf(outCat)) {
+      desigBlock = `${incomingDesig.name} (${inCat ?? 'unknown tier'}) cannot replace ${outgoingDesig.name} (${outCat}).`
+    } else {
+      desigWarn = `⚠️ ${incomingDesig.name} is replacing ${outgoingDesig.name} — cross-designation. Confirm this is intended.`
     }
   }
 

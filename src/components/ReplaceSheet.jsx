@@ -211,7 +211,7 @@ export default function ReplaceSheet({
       <h3 className="section-heading">📞 Available to call ({available.length})</h3>
       {available.length === 0 ? (
         <p className="muted empty-state">
-          No eligible, cert-current {designationName} on base to call.
+          No eligible base staff who can fill the {designationName} role on base.
         </p>
       ) : (
         <ul className="card-list">
@@ -224,7 +224,7 @@ export default function ReplaceSheet({
                     <div className="emp-card__main">
                       <span className="emp-card__name">{c.full_name}</span>
                       <span className="emp-card__meta">
-                        {c.emp_id} · {restLabel(c)}
+                        {c.emp_id} · {c.designation?.name ?? '—'} · {restLabel(c)}
                       </span>
                     </div>
                     <span className="pill pill--ok">Certs OK</span>
@@ -270,7 +270,7 @@ export default function ReplaceSheet({
                     <div className="emp-card__main">
                       <span className="emp-card__name">{c.full_name}</span>
                       <span className="emp-card__meta">
-                        {c.emp_id} · {restLabel(c)}
+                        {c.emp_id} · {c.designation?.name ?? '—'} · {restLabel(c)}
                       </span>
                     </div>
                     <span className="pill pill--bad">{c.status?.label}</span>
