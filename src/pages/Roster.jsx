@@ -168,7 +168,7 @@ export default function Roster() {
   const replaceGroups = useMemo(
     () =>
       target?.employee?.designation?.id
-        ? splitReplacementGroups(candidates, target.employee.designation.id)
+        ? splitReplacementGroups(candidates, target.employee.designation.category?.name)
         : null,
     [candidates, target]
   )

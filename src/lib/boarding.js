@@ -25,7 +25,7 @@ export async function listOffshoreStints() {
     .from('rotation_log')
     .select(
       'id,sign_on_date,expected_rotation_date,installation_id,' +
-        'employee:employees(id,emp_id,full_name,designation:designations(id,name)),' +
+        'employee:employees(id,emp_id,full_name,designation:designations(id,name,category:categories(name))),' +
         'installation:installations(id,name,type)'
     )
     .is('sign_off_date', null)

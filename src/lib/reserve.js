@@ -8,6 +8,29 @@ import { daysBetween, todayISO } from './dates'
 // reserve_pool = base_staff WHERE eligible AND all_certs_current AND
 //                availability_confirmed (live, unexpired).
 
+// Skill-tier compatibility for cross-designation replacement (SPEC.md §17.I).
+// A candidate can fill an outgoing role only if their tier is >= the outgoing's;
+// Outsourced is a closed group (only Outsourced can replace Outsourced). Tier
+// names are the category names ('Skilled' / 'Semi-skilled' / 'Unskilled' /
+// 'Outsourced'), reached via the designation -> category join.
+const SKILL_TIER = {
+  skilled: 3,
+  'semi-skilled': 2,
+  unskilled: 1,
+  outsourced: 0,
+}
+function tierOf(cat) {
+  return SKILL_TIER[(cat ?? '').toLowerCase()] ?? 1
+}
+function canReplace(outgoingCat, candidateCat) {
+  const o = (outgoingCat ?? '').toLowerCase()
+  const c = (candidateCat ?? '').toLowerCase()
+  if (o === 'outsourced') return c === 'outsourced'
+  return tierOf(c) >= tierOf(o)
+}
+// The skill-tier (category) name carried on an employee/candidate via its join.
+const skillCategoryOf = (x) => x?.designation?.category?.name ?? null
+
 // ---------------------------------------------------------------------
 // Fetchers
 // ---------------------------------------------------------------------
@@ -24,7 +47,7 @@ export async function listOnBaseEmployees() {
     .select(
       'id,emp_id,full_name,phone,designation_id,employment_status,current_installation_id,' +
         'base_location_type,recall_lead_time_days,' +
-        'designation:designations(id,name)'
+        'designation:designations(id,name,category:categories(name))'
     )
     .is('current_installation_id', null)
     .order('full_name')
@@ -143,11 +166,12 @@ export function isDeprioritised(c) {
   )
 }
 
-// Replacement candidates for a designation: eligible + cert-current base staff,
-// ranked confirmed-first, then by usefulness, then fewest calls (§6.5).
-export function rankReplacementCandidates(candidates, designationId) {
+// Replacement candidates for an outgoing role: eligible + cert-current base
+// staff whose skill tier can replace it (§17.I), ranked confirmed-first, then by
+// usefulness, then fewest calls (§6.5).
+export function rankReplacementCandidates(candidates, outgoingCategory) {
   const pool = candidates.filter(
-    (c) => c.designation_id === designationId && c.eligible && c.cert.certCurrent
+    (c) => canReplace(outgoingCategory, skillCategoryOf(c)) && c.eligible && c.cert.certCurrent
   )
   return pool.sort((a, b) => {
     if (a.liveConfirmed !== b.liveConfirmed) return a.liveConfirmed ? -1 : 1
@@ -200,13 +224,19 @@ function availableRank(a, b) {
   return a.full_name.localeCompare(b.full_name)
 }
 
-// Split a designation's candidates into the three finder sections:
+// Split the candidates a given outgoing role can be replaced by into the three
+// finder sections:
 //   confirmed — live-confirmed, eligible, cert-current, active (ready now)
 //   available — eligible, cert-current, active, not yet confirmed (call them)
 //   blocked   — anything else (cert issue / declined / resting / inactive),
 //               each tagged with its blocking status for display.
-export function splitReplacementGroups(candidates, designationId) {
-  const pool = candidates.filter((c) => c.designation_id === designationId)
+// Eligibility is now skill-tier based (§17.I): a candidate is in the pool iff
+// their tier can replace `outgoingCategory`. This is the single eligibility gate
+// (it subsumes the old exact-designation match — a same-designation candidate is
+// always same-tier, so still passes). Same-tier cross-designation is included
+// without a warning, intentional per ops.
+export function splitReplacementGroups(candidates, outgoingCategory) {
+  const pool = candidates.filter((c) => canReplace(outgoingCategory, skillCategoryOf(c)))
   const confirmed = []
   const available = []
   const blocked = []
