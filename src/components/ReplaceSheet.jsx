@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
-import { isDeprioritised } from '../lib/reserve'
+import { isDeprioritised, createCall, setCallOutcome, listCallLog } from '../lib/reserve'
 import { daysInclusive, daysBetween, todayISO } from '../lib/dates'
 
 const OUTCOME_LABEL = {
@@ -8,6 +8,24 @@ const OUTCOME_LABEL = {
   call_back: 'Call back',
   confirmed: 'Confirmed',
   declined: 'Declined',
+  unreachable: 'Unreachable',
+}
+
+// Model A outcome buttons, in display order.
+const CALL_OUTCOMES = [
+  ['confirmed', 'Confirmed'],
+  ['declined', 'Declined'],
+  ['call_back', 'Call back'],
+  ['no_answer', 'No answer'],
+  ['unreachable', 'Unreachable'],
+]
+
+const OUTCOME_PILL = {
+  confirmed: 'pill--ok',
+  declined: 'pill--bad',
+  call_back: 'pill--warn',
+  no_answer: 'pill--muted',
+  unreachable: 'pill--muted',
 }
 
 function callSummary(av) {
@@ -29,12 +47,12 @@ export default function ReplaceSheet({
   target,
   targetState,
   deadline,
+  userId,
   groups,
   flash,
   error,
-  onCall,
-  onConfirm,
   onManifest,
+  onChanged,
   onClose,
 }) {
   // Inline "Manifest" quick-action state (one open form at a time).
@@ -44,12 +62,34 @@ export default function ReplaceSheet({
   const [manifestErr, setManifestErr] = useState('')
   const [manifestOkFor, setManifestOkFor] = useState(null)
 
-  // Reset the inline manifest UI whenever the sheet targets a different stint.
+  // Model A inline call flow (one open at a time): tap Call… -> create a call_log
+  // row immediately -> pick an outcome -> (if confirmed) capture commitment info.
+  const [callRowFor, setCallRowFor] = useState(null) // candidate id
+  const [callId, setCallId] = useState(null) // the created call_log row
+  const [callBusy, setCallBusy] = useState(false)
+  const [callErr, setCallErr] = useState('')
+  const [confirmExtras, setConfirmExtras] = useState(false)
+  const [cDate, setCDate] = useState(todayISO())
+  const [cHometown, setCHometown] = useState('')
+  const [cTravel, setCTravel] = useState('')
+
+  // "Check history" collapsible (one open at a time).
+  const [historyFor, setHistoryFor] = useState(null)
+  const [historyRows, setHistoryRows] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
+  // Reset all inline UI whenever the sheet targets a different stint.
   useEffect(() => {
     setManifestForId(null)
     setManifestOkFor(null)
     setManifestErr('')
     setManifestDate(todayISO())
+    setCallRowFor(null)
+    setCallId(null)
+    setCallErr(null)
+    setConfirmExtras(false)
+    setHistoryFor(null)
+    setHistoryRows([])
   }, [target?.id])
 
   if (!open || !target) return null
@@ -146,6 +186,171 @@ export default function ReplaceSheet({
     )
   }
 
+  // --- Model A call flow ---
+  async function startCall(c) {
+    setCallRowFor(c.id)
+    setConfirmExtras(false)
+    setCallErr('')
+    setCDate(todayISO())
+    setCHometown('')
+    setCTravel('')
+    setCallId(null)
+    setCallBusy(true)
+    const { id, error: err } = await createCall(c.id, { userId })
+    setCallBusy(false)
+    if (err) {
+      setCallErr(err.message)
+      return
+    }
+    setCallId(id)
+  }
+  function cancelCall() {
+    setCallRowFor(null)
+    setCallId(null)
+    setConfirmExtras(false)
+    setCallErr('')
+  }
+  async function saveOutcome(c, outcome, extras) {
+    if (!callId) return
+    setCallBusy(true)
+    setCallErr('')
+    const { error: err } = await setCallOutcome(callId, c.id, outcome, { ...extras, userId })
+    setCallBusy(false)
+    if (err) {
+      setCallErr(err.message)
+      return
+    }
+    cancelCall()
+    onChanged?.()
+  }
+  function pickOutcome(c, outcome) {
+    // 'confirmed' opens the optional commitment fields; the rest save at once.
+    if (outcome === 'confirmed') {
+      setConfirmExtras(true)
+      return
+    }
+    saveOutcome(c, outcome, {})
+  }
+  const saveConfirmed = (c) =>
+    saveOutcome(c, 'confirmed', {
+      commitmentDate: cDate || null,
+      hometown: cHometown,
+      travelDays: cTravel,
+    })
+
+  // The inline outcome row beneath a candidate card.
+  const callFlow = (c) => {
+    if (callRowFor !== c.id) return null
+    return (
+      <div className="call-flow">
+        {callErr && <p className="banner banner--error">{callErr}</p>}
+        {callBusy && !callId && <p className="muted">Logging call…</p>}
+        {!confirmExtras ? (
+          <div className="outcome-grid">
+            {CALL_OUTCOMES.map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                className="outcome-btn"
+                disabled={callBusy || !callId}
+                onClick={() => pickOutcome(c, val)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="call-confirm">
+            <label className="field field--inline">
+              <span>Commitment date</span>
+              <input type="date" value={cDate} onChange={(e) => setCDate(e.target.value)} />
+            </label>
+            <label className="field field--inline">
+              <span>Hometown</span>
+              <input value={cHometown} onChange={(e) => setCHometown(e.target.value)} />
+            </label>
+            <label className="field field--inline">
+              <span>Travel days</span>
+              <input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                value={cTravel}
+                onChange={(e) => setCTravel(e.target.value)}
+              />
+            </label>
+            <div className="cand-manifest__actions">
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={cancelCall}
+                disabled={callBusy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary btn--sm"
+                onClick={() => saveConfirmed(c)}
+                disabled={callBusy}
+              >
+                {callBusy ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
+        {!confirmExtras && (
+          <button
+            type="button"
+            className="linkish call-flow__cancel"
+            onClick={cancelCall}
+            disabled={callBusy}
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  // --- Check history ---
+  async function toggleHistory(c) {
+    if (historyFor === c.id) {
+      setHistoryFor(null)
+      return
+    }
+    setHistoryFor(c.id)
+    setHistoryRows([])
+    setHistoryLoading(true)
+    const { data, error: err } = await listCallLog(c.id)
+    setHistoryLoading(false)
+    if (!err) setHistoryRows(data ?? [])
+  }
+  const historyToggle = (c) => (
+    <button type="button" className="linkish call-history__toggle" onClick={() => toggleHistory(c)}>
+      Call history ({c.availability?.call_count ?? 0})
+    </button>
+  )
+  const historyPanel = (c) => {
+    if (historyFor !== c.id) return null
+    if (historyLoading) return <p className="muted call-history">Loading…</p>
+    if (historyRows.length === 0) return <p className="muted call-history">No calls logged yet.</p>
+    return (
+      <ul className="call-history">
+        {historyRows.map((r) => (
+          <li key={r.id} className="call-history__row">
+            <span className="call-history__date">{r.called_at?.slice(0, 10)}</span>
+            <span className={`pill ${OUTCOME_PILL[r.outcome] ?? 'pill--muted'}`}>
+              {OUTCOME_LABEL[r.outcome] ?? r.outcome ?? 'No outcome'}
+            </span>
+            {r.commitment_date && <span className="muted">→ {r.commitment_date}</span>}
+            {r.hometown && <span className="muted">· {r.hometown}</span>}
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
   return (
     <Modal open={open} title="Find replacement" onClose={onClose}>
       <div className={`target-card ${targetState?.cls ?? ''}`}>
@@ -199,6 +404,8 @@ export default function ReplaceSheet({
                     </div>
                     <div className="cand-card__actions">{manifestBtn(c)}</div>
                     {manifestPanel(c)}
+                    {historyToggle(c)}
+                    {historyPanel(c)}
                   </div>
                 </li>
               )
@@ -237,20 +444,17 @@ export default function ReplaceSheet({
                     <button
                       type="button"
                       className="btn btn--ghost btn--sm"
-                      onClick={() => onCall(c)}
+                      onClick={() => startCall(c)}
+                      disabled={callRowFor === c.id}
                     >
                       Call…
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn--primary btn--sm"
-                      onClick={() => onConfirm(c)}
-                    >
-                      Confirm
-                    </button>
                     {manifestBtn(c)}
                   </div>
+                  {callFlow(c)}
                   {manifestPanel(c)}
+                  {historyToggle(c)}
+                  {historyPanel(c)}
                 </div>
               </li>
             )

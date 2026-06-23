@@ -1576,6 +1576,56 @@ code {
   color: #1c6e45;
 }
 
+/* Model A inline call flow (outcome picker + confirmed details). */
+.call-flow {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.call-flow .outcome-grid {
+  margin: 0 0 8px;
+}
+
+.call-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.call-flow__cancel {
+  font-size: 0.78rem;
+}
+
+/* "Check history" toggle + collapsible call list. */
+.call-history__toggle {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 0.78rem;
+}
+
+.call-history {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.call-history__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.call-history__date {
+  font-weight: 600;
+}
+
 /* Tappable phone number at the top of the call dialog. */
 .call-dial {
   display: flex;

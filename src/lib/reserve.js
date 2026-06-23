@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { computeCertStatus, listDocumentTypes, listAllEmployeeDocuments } from './documents'
 import { getAppConfig, configInt } from './config'
-import { daysBetween, todayISO } from './dates'
+import { daysBetween, todayISO, addDays } from './dates'
 import { nedpStatus } from './nedp'
 
 // Reserve pool + replacement finder logic (SPEC.md §3.4, §6.3, §6.5, §6.6).
@@ -277,43 +277,82 @@ export function splitReplacementGroups(candidates, outgoingCategory) {
 }
 
 // ---------------------------------------------------------------------
-// Actions (§6.6): log a call and update availability in one go.
-// Outcome 'confirmed' sets a live confirmation; 'declined' clears it.
+// Calls (§6.6 / Workstream L "Model A"). A call is recorded in two steps so the
+// UI can capture the outcome (and the confirmation details) after the call has
+// actually been placed: createCall() logs the attempt, setCallOutcome() records
+// how it went. logCall() below stitches both together for older callers.
 // ---------------------------------------------------------------------
-export async function logCall(
-  employeeId,
-  outcome,
-  { notes, userId, confirmationValidityDays = 14, confirmedForDate } = {}
-) {
-  const nowISO = new Date().toISOString()
 
-  const { error: callErr } = await supabase.from('call_log').insert({
-    employee_id: employeeId,
-    called_by: userId ?? null,
-    outcome,
-    notes: notes?.trim() || null,
-  })
+// Step 1: log a placed call immediately, before its outcome is known. Bumps the
+// call counter exactly once here — setCallOutcome must NOT touch call_count.
+// Returns the new call_log id.
+export async function createCall(employeeId, { userId } = {}) {
+  const nowISO = new Date().toISOString()
+  const { data: call, error: callErr } = await supabase
+    .from('call_log')
+    .insert({ employee_id: employeeId, called_by: userId ?? null, outcome: null })
+    .select('id')
+    .single()
   if (callErr) return { error: callErr }
 
-  // Read current state to increment call_count (no atomic counter at this scale).
+  // Read current count to increment (no atomic counter needed at this scale).
   const { data: existing } = await supabase
     .from('availability')
     .select('call_count')
     .eq('employee_id', employeeId)
     .maybeSingle()
 
+  const { error: upErr } = await supabase.from('availability').upsert(
+    {
+      employee_id: employeeId,
+      call_count: (existing?.call_count ?? 0) + 1,
+      last_call_at: nowISO,
+      updated_by: userId ?? null,
+    },
+    { onConflict: 'employee_id' }
+  )
+  if (upErr) return { error: upErr }
+  return { id: call.id, error: null }
+}
+
+// Step 2: record the outcome of a placed call (by call_log id). Mirrors the
+// outcome onto availability.last_call_outcome; a 'confirmed' outcome opens a live
+// confirmation (valid 7 days from the commitment date — Model A), a 'declined'
+// one clears any confirmation. Never changes call_count.
+export async function setCallOutcome(
+  callId,
+  employeeId,
+  outcome,
+  { notes, commitmentDate, hometown, travelDays, userId } = {}
+) {
+  const nowISO = new Date().toISOString()
+
+  const { error: callErr } = await supabase
+    .from('call_log')
+    .update({
+      outcome,
+      notes: notes?.trim() || null,
+      commitment_date: commitmentDate || null,
+      hometown: hometown?.trim() || null,
+      travel_days: travelDays === '' || travelDays == null ? null : Number(travelDays),
+    })
+    .eq('id', callId)
+  if (callErr) return { error: callErr }
+
   const row = {
     employee_id: employeeId,
-    call_count: (existing?.call_count ?? 0) + 1,
-    last_call_at: nowISO,
     last_call_outcome: outcome,
     updated_by: userId ?? null,
   }
   if (outcome === 'confirmed') {
+    // Confirmation window = commitment date + the configured validity period
+    // (same app_config key the rest of the confirm flow uses).
+    const { config } = await getAppConfig()
+    const validityDays = configInt(config, 'confirmation_validity_days', 14)
     row.confirmed = true
     row.confirmed_at = nowISO
-    row.expires_at = new Date(Date.now() + confirmationValidityDays * 86400000).toISOString()
-    if (confirmedForDate) row.confirmed_for_date = confirmedForDate
+    row.confirmed_for_date = commitmentDate || null
+    row.expires_at = addDays(commitmentDate || todayISO(), validityDays)
   } else if (outcome === 'declined') {
     row.confirmed = false
   }
@@ -322,6 +361,28 @@ export async function logCall(
     .from('availability')
     .upsert(row, { onConflict: 'employee_id' })
   return { error: upErr }
+}
+
+// Deprecated single-shot wrapper kept so the Base-staff CallDialog keeps working
+// unchanged: create the call, then immediately record its outcome. The
+// confirmation window now follows Model A (commitment date + 7 days);
+// confirmedForDate maps to the commitment date.
+export async function logCall(employeeId, outcome, { notes, userId, confirmedForDate } = {}) {
+  const { id, error } = await createCall(employeeId, { userId })
+  if (error) return { error }
+  return setCallOutcome(id, employeeId, outcome, { notes, commitmentDate: confirmedForDate, userId })
+}
+
+// Full call history for one employee, newest first, with the caller's name.
+export async function listCallLog(employeeId) {
+  return supabase
+    .from('call_log')
+    .select(
+      'id,called_at,outcome,notes,commitment_date,hometown,travel_days,' +
+        'caller:app_users(full_name)'
+    )
+    .eq('employee_id', employeeId)
+    .order('called_at', { ascending: false })
 }
 
 // Confirm availability for many employees at once without going through the

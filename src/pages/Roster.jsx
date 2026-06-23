@@ -204,21 +204,6 @@ export default function Roster() {
     return { error: err }
   }
 
-  async function doConfirm(c) {
-    setFlash('')
-    setSheetError('')
-    const { error: err } = await logCall(c.id, 'confirmed', {
-      userId: user?.id,
-      confirmationValidityDays: validityDays,
-      confirmedForDate: target ? deadlineFor(target) : undefined,
-    })
-    if (err) setSheetError(err.message)
-    else {
-      setFlash(`${c.full_name} confirmed (valid ${validityDays} days).`)
-      await load()
-    }
-  }
-
   async function handleLogCall(outcome, notes) {
     const c = callFor
     setCallFor(null)
@@ -619,12 +604,12 @@ export default function Roster() {
         target={target}
         targetState={targetState}
         deadline={target ? deadlineFor(target) : null}
+        userId={user?.id}
         groups={replaceGroups}
         flash={flash}
         error={sheetError}
-        onCall={(c) => setCallFor(c)}
-        onConfirm={doConfirm}
         onManifest={handleManifest}
+        onChanged={load}
         onClose={closeReplace}
       />
 
