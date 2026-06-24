@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 // Primary bottom nav — 4 thumb-friendly destinations, no horizontal scroll.
 // Find replacement + the reserve pool now live inside Roster; Employee Master
@@ -17,13 +18,35 @@ export const MENU_ITEMS = [
   { to: '/configuration', label: 'Configuration', icon: '⚙️' },
 ]
 
-// All routable destinations, for the header to resolve the current page title.
-export const ALL_NAV = [...NAV_ITEMS, ...MENU_ITEMS]
+// Role-scoped destinations (SPEC.md §17.M).
+const CM_BOARD = { to: '/cm', label: 'Board', icon: '🚁' }
+const ONGC_OVERVIEW = { to: '/ongc-head', label: 'Overview', icon: '📊' }
+
+// Bottom-nav items for a role. catering_manager gets their CM view + read-only
+// Roster; ongc_head gets no bottom nav (only their own view); admin/hr_manager
+// get the full nav.
+export function navItemsFor(role) {
+  if (role === 'catering_manager') return [CM_BOARD, { to: '/roster', label: 'Roster', icon: '📋' }]
+  if (role === 'ongc_head') return []
+  return NAV_ITEMS
+}
+
+// Hamburger-menu items for a role (catering_manager / ongc_head get none).
+export function menuItemsFor(role) {
+  if (role === 'catering_manager' || role === 'ongc_head') return []
+  return MENU_ITEMS
+}
+
+// Every routable destination, for the header to resolve the current page title.
+export const ALL_NAV = [...NAV_ITEMS, ...MENU_ITEMS, CM_BOARD, ONGC_OVERVIEW]
 
 export default function BottomNav() {
+  const { role } = useAuth()
+  const items = navItemsFor(role)
+  if (items.length === 0) return null
   return (
     <nav className="bottom-nav" aria-label="Primary">
-      {NAV_ITEMS.map((item) => (
+      {items.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}

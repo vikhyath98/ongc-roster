@@ -30,7 +30,16 @@ const OUTCOME_LABEL = {
 //   Base staff — everyone on base (the reserve pool), with rest / eligibility /
 //               confirmation at a glance.
 export default function Roster() {
-  const { user } = useAuth()
+  const { user, role, installations } = useAuth()
+  // Catering managers get a read-only roster scoped to their installation(s)
+  // (SPEC.md §17.M): no Find Replacement / call / confirm / select actions.
+  // scopeIds = null for everyone else (no scoping); an array (possibly empty)
+  // for a catering manager, so the offshore list is filtered to IN [ids].
+  const readOnly = role === 'catering_manager'
+  const scopeIds = useMemo(
+    () => (readOnly ? (installations ?? []).map((i) => i.id) : null),
+    [readOnly, installations]
+  )
   const [searchParams] = useSearchParams()
   // Deep-link support from the Dashboard reserve-readiness tiles.
   const [tab, setTab] = useState(searchParams.get('tab') === 'base' ? 'base' : 'offshore')
@@ -105,6 +114,7 @@ export default function Roster() {
   const offshoreList = useMemo(
     () =>
       stints
+        .filter((s) => !scopeIds || scopeIds.includes(s.installation_id))
         .filter((s) => !fInstall || s.installation_id === fInstall)
         .filter((s) => !fDesig || s.employee?.designation?.id === fDesig)
         .map((s) => {
@@ -112,10 +122,12 @@ export default function Roster() {
           return { ...s, days, state: rotationState(days, thresholds) }
         })
         .sort((a, b) => b.days - a.days),
-    [stints, thresholds, fInstall, fDesig]
+    [stints, thresholds, fInstall, fDesig, scopeIds]
   )
 
-  const total = stints.length
+  const total = scopeIds
+    ? stints.filter((s) => scopeIds.includes(s.installation_id)).length
+    : stints.length
   const shown = offshoreList.length
   const filtered = Boolean(fInstall || fDesig)
 
@@ -356,7 +368,7 @@ export default function Roster() {
                           </span>
                         </div>
                       </div>
-                      {canReplace && (
+                      {canReplace && !readOnly && (
                         <button
                           type="button"
                           className="btn btn--ghost btn--sm roster-card__action"
@@ -437,7 +449,7 @@ export default function Roster() {
             <p className="list-count muted">
               {baseFiltered ? `${baseShown.length} of ${baseStaff.length}` : baseStaff.length} on base
             </p>
-            {baseStaff.length > 0 && (
+            {baseStaff.length > 0 && !readOnly && (
               <button type="button" className="linkish" onClick={toggleSelectMode}>
                 {selectMode ? 'Cancel' : 'Select'}
               </button>
@@ -537,7 +549,7 @@ export default function Roster() {
                           )}
                         </div>
                       </div>
-                      {!selectMode && (
+                      {!selectMode && !readOnly && (
                         <div className="roster-card__actions">
                           <button
                             type="button"

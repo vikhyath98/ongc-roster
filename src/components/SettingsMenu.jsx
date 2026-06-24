@@ -1,11 +1,14 @@
 import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
-import { MENU_ITEMS } from './BottomNav'
+import { menuItemsFor } from './BottomNav'
+import { useAuth } from '../context/AuthContext'
 
 // Slide-in drawer opened from the header hamburger. Holds the secondary
 // destinations (Employee Master, Configuration) plus identity + sign out,
 // keeping them out of the thumb-zone bottom nav.
 export default function SettingsMenu({ open, who, onClose, onSignOut }) {
+  const { role } = useAuth()
+  const menuItems = menuItemsFor(role)
   useEffect(() => {
     if (!open) return
     function onKey(e) {
@@ -40,7 +43,7 @@ export default function SettingsMenu({ open, who, onClose, onSignOut }) {
         </div>
 
         <nav className="drawer__nav" aria-label="Secondary">
-          {MENU_ITEMS.map((item) => (
+          {menuItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

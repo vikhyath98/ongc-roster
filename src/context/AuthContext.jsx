@@ -4,6 +4,12 @@ import { ensureAppUser, fetchAppUser } from '../lib/appUser'
 
 const AuthContext = createContext(null)
 
+// Role gate (SPEC.md §17.M). Admin always passes, whatever roles are listed.
+export function hasRole(profile, ...roles) {
+  if (profile?.role === 'admin') return true
+  return roles.includes(profile?.role)
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -22,7 +28,19 @@ export function AuthProvider({ children }) {
       }
       await ensureAppUser(user)
       const { data } = await fetchAppUser(user.id)
-      if (active) setProfile(data)
+      let prof = data
+      // A catering manager can be scoped to several installations via the
+      // app_user_installations junction. Load them and attach as profile
+      // .installations BEFORE exposing the profile, so consumers (CM view,
+      // Roster scoping) never see a half-loaded profile.
+      if (prof?.role === 'catering_manager') {
+        const { data: rows } = await supabase
+          .from('app_user_installations')
+          .select('installation_id, installation:installations(id, name)')
+          .eq('user_id', prof.id)
+        prof = { ...prof, installations: (rows ?? []).map((r) => r.installation).filter(Boolean) }
+      }
+      if (active) setProfile(prof)
     }
 
     // Load any persisted session on first mount.
@@ -50,6 +68,8 @@ export function AuthProvider({ children }) {
       session,
       user: session?.user ?? null,
       profile,
+      role: profile?.role ?? null,
+      installations: profile?.installations ?? [],
       loading,
       // Email/password auth needs no redirectTo (that is only for magic links
       // and OAuth), so none is passed — login works on any domain.
