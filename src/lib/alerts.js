@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { daysBetween, todayISO } from './dates'
+import { classifyOffshoreEmployee } from './manifestPipeline'
 
 // Workstream D (SPEC.md §14.7): the three Dashboard manifestation alerts.
 // Takes the already-loaded employees + decorated offshore stints (each with a
@@ -62,41 +63,30 @@ export async function loadManifestAlerts({ employees, stints, thresholds, today 
   awaitingDropped.sort(byWaitDesc)
   awaitingNoShow.sort(byWaitDesc)
 
-  // ---- Alert 2: Relief failed to arrive (offshore-side) ----
-  // Offshore past max, whose most recent relief pairing resolved dropped/no_show
-  // with no successor boarded yet (so we know WHY they're still overdue).
-  const pairsByOut = new Map()
-  for (const p of pairRes.data ?? []) {
-    if (!pairsByOut.has(p.outgoing_employee_id)) pairsByOut.set(p.outgoing_employee_id, [])
-    pairsByOut.get(p.outgoing_employee_id).push(p)
+  // ---- Alerts 2 & 3 via the shared pipeline classifier (§17.K) ----
+  // Both buckets are now derived from classifyOffshoreEmployee so the Board and
+  // the Dashboard can never disagree. The alert-specific day thresholds stay
+  // here: "Relief failed to arrive" only fires past max_service_days (the
+  // 'retry' column itself has no threshold); "Manifest needed soon" is the
+  // 'needs_manifest' column (which already gates on warning_day).
+  const classifyArgs = {
+    manifestItems: mriRes.data ?? [],
+    pairings: pairRes.data ?? [],
+    warningDay: thresholds.warning,
+    today,
   }
   const reliefFailed = []
-  for (const s of stints) {
-    if (s.days <= thresholds.max) continue
-    const ps = pairsByOut.get(s.employee?.id) ?? []
-    if (ps.length === 0) continue
-    if (ps.some((p) => p.status === 'boarded' && !p.consumed_at)) continue // relief in motion
-    const latest = ps
-      .slice()
-      .sort((a, b) =>
-        ((b.updated_at || b.created_at) ?? '').localeCompare((a.updated_at || a.created_at) ?? '')
-      )[0]
-    if (!latest || !FAILED.includes(latest.status)) continue
-    reliefFailed.push({ stint: s, reason: latest.status })
-  }
-  reliefFailed.sort((a, b) => b.stint.days - a.stint.days)
-
-  // ---- Alert 3: Manifest needed soon ----
-  // Offshore, past warning_day, never named in any manifest_request_item.
-  const everNamed = new Set(
-    (mriRes.data ?? []).map((m) => m.replacing_employee_id).filter(Boolean)
-  )
   const manifestNeeded = []
   for (const s of stints) {
-    if (s.days < thresholds.warning) continue
-    if (everNamed.has(s.employee?.id)) continue
-    manifestNeeded.push({ stint: s })
+    const r = classifyOffshoreEmployee(s, classifyArgs)
+    if (!r) continue
+    if (r.column === 'retry' && s.days > thresholds.max) {
+      reliefFailed.push({ stint: s, reason: r.pairing.status })
+    } else if (r.column === 'needs_manifest') {
+      manifestNeeded.push({ stint: s })
+    }
   }
+  reliefFailed.sort((a, b) => b.stint.days - a.stint.days)
   manifestNeeded.sort((a, b) => b.stint.days - a.stint.days)
 
   return { error: null, awaitingDropped, awaitingNoShow, reliefFailed, manifestNeeded }
