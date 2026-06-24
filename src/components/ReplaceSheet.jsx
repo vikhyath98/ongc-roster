@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Modal from './Modal'
 import { isDeprioritised, createCall, setCallOutcome, listCallLog } from '../lib/reserve'
 import { daysInclusive, daysBetween, todayISO } from '../lib/dates'
+import { nedpStatus } from '../lib/nedp'
 
 const OUTCOME_LABEL = {
   no_answer: 'No answer',
@@ -396,7 +397,12 @@ export default function ReplaceSheet({
                           {c.emp_id} · {restLabel(c)}
                         </span>
                       </div>
-                      <span className="pill pill--ok">Confirmed</span>
+                      <span className="cand-card__pills">
+                        <span className="pill pill--ok">Confirmed</span>
+                        {nedpStatus(c.nedp_valid_until) === 'expiring' && (
+                          <span className="pill pill--warn">NEDP expiring</span>
+                        )}
+                      </span>
                     </div>
                     <div className="cand-card__calls muted">
                       {callSummary(c.availability)}
@@ -434,7 +440,12 @@ export default function ReplaceSheet({
                         {c.emp_id} · {c.designation?.name ?? '—'} · {restLabel(c)}
                       </span>
                     </div>
-                    <span className="pill pill--ok">Certs OK</span>
+                    <span className="cand-card__pills">
+                      <span className="pill pill--ok">Certs OK</span>
+                      {nedpStatus(c.nedp_valid_until) === 'expiring' && (
+                        <span className="pill pill--warn">NEDP expiring</span>
+                      )}
+                    </span>
                   </div>
                   <div className="cand-card__calls muted">
                     {callSummary(c.availability)}

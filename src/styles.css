@@ -1526,6 +1526,14 @@ code {
   gap: 10px;
 }
 
+/* Right-side pill stack on a candidate card (status + NEDP-expiring warning). */
+.cand-card__pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .cand-confirmed {
   margin-left: 8px;
 }
