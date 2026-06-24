@@ -1841,6 +1841,43 @@ code {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Flow B base-side card: checkbox left, content right (name prominent). */
+.board-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.board-card--selectable {
+  cursor: pointer;
+}
+
+.board-card.is-selected {
+  outline: 2px solid var(--teal);
+  outline-offset: -2px;
+}
+
+.board-card__check {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--teal);
+  pointer-events: none;
+}
+
+.board-card__body {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ---------- Boarding ---------- */
 .board-controls {
   display: grid;

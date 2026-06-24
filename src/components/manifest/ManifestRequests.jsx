@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listManifestRequests, createManifestRequest } from '../../lib/manifest'
-import { loadCandidates, splitReplacementGroups } from '../../lib/reserve'
+import { loadCandidates, canReplace } from '../../lib/reserve'
 import { listInstallations, listDesignations } from '../../lib/reference'
 import { listInstallationRequirements } from '../../lib/configAdmin'
 import { listOffshoreStints } from '../../lib/boarding'
-import { todayISO } from '../../lib/dates'
+import { todayISO, daysInclusive } from '../../lib/dates'
 import Modal from '../Modal'
 import LineItemPicker from './LineItemPicker'
 import ManifestRequestDetail from './ManifestRequestDetail'
@@ -134,7 +134,7 @@ export function NewRequestModal({
   designations,
   offshore,
   thresholds,
-  seedOutgoing = [], // stints pre-selected on the Board to be relieved
+  seedIncoming = [], // base employees pre-selected on the Board to send
   mode = 'new', // 'new' | 'retry' (affects labels only; lib auto-chains retries)
   onClose,
   onCreated,
@@ -143,26 +143,34 @@ export function NewRequestModal({
   const [requestDate, setRequestDate] = useState(todayISO())
   const [notes, setNotes] = useState('')
   const [items, setItems] = useState([])
-  // One row per pre-seeded outgoing employee, each awaiting a confirmed incoming.
+  // One row per pre-seeded incoming employee, each awaiting an outgoing to relieve.
   const [seedRows, setSeedRows] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  const seeded = seedOutgoing.length > 0
+  const seeded = seedIncoming.length > 0
 
   useEffect(() => {
     if (!open) return
-    setInstallationId(seeded ? seedOutgoing[0]?.installation_id ?? '' : '')
+    // A retry seed carries lockedOutgoingId (the original failed pairing). Pre-fill
+    // each relief's outgoing and derive the request's installation from it.
+    const firstLocked = seedIncoming.find((c) => c.lockedOutgoingId)
+    setInstallationId(
+      firstLocked
+        ? offshore.find((s) => s.employee?.id === firstLocked.lockedOutgoingId)?.installation_id ?? ''
+        : ''
+    )
     setRequestDate(todayISO())
     setNotes('')
     setItems([])
     setSeedRows(
-      seedOutgoing.map((s) => ({
-        outgoingId: s.employee.id,
-        outgoingName: s.employee.full_name,
-        designationName: s.employee.designation?.name ?? '',
-        category: s.employee.designation?.category?.name ?? null,
-        incomingId: '',
+      seedIncoming.map((c) => ({
+        incomingId: c.id,
+        incomingName: c.full_name,
+        designationName: c.designation?.name ?? '',
+        category: c.designation?.category?.name ?? null,
+        outgoingId: c.lockedOutgoingId ?? '',
+        locked: Boolean(c.lockedOutgoingId),
       }))
     )
     setBusy(false)
@@ -182,8 +190,8 @@ export function NewRequestModal({
   const usedIds = useMemo(() => {
     const s = new Set()
     for (const r of seedRows) {
-      s.add(r.outgoingId)
-      if (r.incomingId) s.add(r.incomingId)
+      s.add(r.incomingId)
+      if (r.outgoingId) s.add(r.outgoingId)
     }
     for (const it of items) {
       s.add(it.employeeId)
@@ -192,19 +200,32 @@ export function NewRequestModal({
     return s
   }, [seedRows, items])
 
-  // Confirmed-ready incoming options for a seed row, by the outgoing's tier.
-  function incomingOptionsFor(row) {
-    const confirmed = splitReplacementGroups(candidates, row.category).confirmed
-    return confirmed.filter((c) => !usedIds.has(c.id) || c.id === row.incomingId)
+  // Offshore employees at the chosen installation this incoming can relieve (tier
+  // rule, §17.I), minus anyone already used elsewhere on this request.
+  function outgoingOptionsFor(row) {
+    if (!installationId) return []
+    return offshore.filter(
+      (s) =>
+        s.installation_id === installationId &&
+        canReplace(s.employee?.designation?.category?.name, row.category) &&
+        (!usedIds.has(s.employee?.id) || s.employee?.id === row.outgoingId)
+    )
   }
-  const setSeedIncoming = (idx, incomingId) =>
-    setSeedRows((rows) => rows.map((r, i) => (i === idx ? { ...r, incomingId } : r)))
+  const setSeedOutgoing = (idx, outgoingId) =>
+    setSeedRows((rows) => rows.map((r, i) => (i === idx ? { ...r, outgoingId } : r)))
+
+  // Read-only label for a retry's locked outgoing (the original employee relieved).
+  const lockedOutgoingLabel = (id) => {
+    const s = offshore.find((x) => x.employee?.id === id)
+    if (!s) return '—'
+    return `${s.employee.full_name} — ${s.installation?.name ?? '—'} · ${daysInclusive(s.sign_on_date)}d`
+  }
 
   const removeItem = (i) => setItems((list) => list.filter((_, idx) => idx !== i))
 
-  // Final line items = assigned seed rows + any ad-hoc picker items.
+  // Final line items = seed rows that have an outgoing assigned + ad-hoc picker items.
   const seedItems = seedRows
-    .filter((r) => r.incomingId)
+    .filter((r) => r.outgoingId)
     .map((r) => ({ employeeId: r.incomingId, replacingEmployeeId: r.outgoingId }))
   const allItems = [...seedItems, ...items]
   const canCreate = installationId && requestDate && allItems.length > 0 && !busy
@@ -227,7 +248,13 @@ export function NewRequestModal({
   return (
     <Modal
       open={open}
-      title={mode === 'retry' ? 'Create retry request' : 'New manifest request'}
+      title={
+        seeded
+          ? mode === 'retry'
+            ? 'Create retry request'
+            : 'Create manifest request'
+          : 'New manifest request'
+      }
       onClose={onClose}
       footer={
         <>
@@ -243,11 +270,7 @@ export function NewRequestModal({
       <div className="board-controls">
         <label className="field">
           <span>Installation *</span>
-          <select
-            value={installationId}
-            onChange={(e) => setInstallationId(e.target.value)}
-            disabled={seeded}
-          >
+          <select value={installationId} onChange={(e) => setInstallationId(e.target.value)}>
             <option value="">Select…</option>
             {installations.map((i) => (
               <option key={i.id} value={i.id}>
@@ -268,35 +291,49 @@ export function NewRequestModal({
 
       {seeded && (
         <>
-          <h3 className="section-heading">Relieving ({seedRows.length})</h3>
+          <h3 className="section-heading">Sending ({seedRows.length})</h3>
+          {!installationId && (
+            <p className="muted">Pick an installation to choose who each person relieves.</p>
+          )}
           <ul className="card-list">
             {seedRows.map((r, i) => {
-              const opts = incomingOptionsFor(r)
+              const opts = r.locked ? [] : outgoingOptionsFor(r)
               return (
-                <li key={r.outgoingId}>
+                <li key={r.incomingId}>
                   <div className="roster-card roster-card--col">
                     <div className="emp-card__main">
-                      <span className="emp-card__name">{r.outgoingName}</span>
-                      <span className="emp-card__meta">{r.designationName} · needs a confirmed relief</span>
+                      <span className="emp-card__name">{r.incomingName}</span>
+                      <span className="emp-card__meta">{r.designationName} · relieving…</span>
                     </div>
-                    <label className="field">
-                      <span>Incoming (confirmed only)</span>
-                      <select
-                        value={r.incomingId}
-                        onChange={(e) => setSeedIncoming(i, e.target.value)}
-                      >
-                        <option value="">— select relief —</option>
-                        {opts.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.full_name} — {c.designation?.name ?? '—'}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    {opts.length === 0 && r.incomingId === '' && (
-                      <span className="reserve-sub reserve-sub--block">
-                        No confirmed relief available for this tier — confirm availability first.
-                      </span>
+                    {r.locked ? (
+                      <p className="field-readonly">
+                        Replacing <strong>{lockedOutgoingLabel(r.outgoingId)}</strong> · original
+                        pairing
+                      </p>
+                    ) : (
+                      <>
+                        <label className="field">
+                          <span>Replacing (offshore here)</span>
+                          <select
+                            value={r.outgoingId}
+                            onChange={(e) => setSeedOutgoing(i, e.target.value)}
+                            disabled={!installationId}
+                          >
+                            <option value="">— select who they relieve —</option>
+                            {opts.map((s) => (
+                              <option key={s.id} value={s.employee.id}>
+                                {s.employee.full_name} — {s.employee.designation?.name ?? '—'} (
+                                {daysInclusive(s.sign_on_date)}d)
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {installationId && opts.length === 0 && r.outgoingId === '' && (
+                          <span className="reserve-sub reserve-sub--block">
+                            No offshore employee here this person can relieve.
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </li>

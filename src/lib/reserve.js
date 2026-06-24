@@ -23,7 +23,7 @@ const SKILL_TIER = {
 function tierOf(cat) {
   return SKILL_TIER[(cat ?? '').toLowerCase()] ?? 1
 }
-function canReplace(outgoingCat, candidateCat) {
+export function canReplace(outgoingCat, candidateCat) {
   const o = (outgoingCat ?? '').toLowerCase()
   const c = (candidateCat ?? '').toLowerCase()
   if (o === 'outsourced') return c === 'outsourced'

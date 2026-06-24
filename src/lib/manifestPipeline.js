@@ -45,16 +45,57 @@ export function classifyOffshoreEmployee(
   return null
 }
 
-// Fetch the three sources the classifier needs, in parallel. These are the same
-// tables alerts.js queries; the Board uses this loader, alerts.js reuses the
-// classifier with its own already-fetched copies of the same tables.
+// Base-side (incoming/relief) classifier for the Board (SPEC.md §17.K rework).
+// Mirror of classifyOffshoreEmployee but keyed on the INCOMING employee:
+//   - pairings where incoming_employee_id = this employee
+//   - manifest_request_items where employee_id = this employee
+// `emp` is an on-base candidate (carrying liveConfirmed/eligible/cert) for the
+// To-manifest gate, or a plain employee row for those already paired/offshore.
+// Precedence: boarded > retry > filed > to_manifest.
+export function classifyBaseEmployee(emp, { pairings, manifestItems }) {
+  const id = emp.id
+  const mine = (pairings ?? []).filter((p) => p.incoming_employee_id === id)
+  const named = (manifestItems ?? []).some((m) => m.employee_id === id)
+
+  const activeBoarded = mine.find((p) => p.status === 'boarded' && !p.consumed_at)
+  if (activeBoarded) return { column: 'boarded', pairing: activeBoarded }
+
+  const latest = mine
+    .slice()
+    .sort((a, b) =>
+      ((b.updated_at || b.created_at) ?? '').localeCompare((a.updated_at || a.created_at) ?? '')
+    )[0]
+
+  if (latest && (latest.status === 'dropped' || latest.status === 'no_show')) {
+    return { column: 'retry', pairing: latest }
+  }
+  // Paperwork in motion: a pairing that is filed/listed (named in an mri in the
+  // normal flow; a pairing in this state is enough to keep them out of To-manifest).
+  if (latest && (latest.status === 'pending' || latest.status === 'rfm_listed')) {
+    return { column: 'filed', pairing: latest }
+  }
+  // Ready to send, no paperwork yet: confirmed-ready on-base staff, not named.
+  if (emp.employment_status === 'active' && emp.liveConfirmed && emp.eligible && emp.cert?.certCurrent && !named) {
+    return { column: 'to_manifest' }
+  }
+  return null
+}
+
+// Fetch the sources the Board needs, in parallel. (alerts.js does NOT use this —
+// it runs its own queries and reuses classifyOffshoreEmployee — so the extra
+// columns/joins here are board-only and safe.)
 export async function loadPipelineData() {
   const [stintRes, mriRes, pairRes] = await Promise.all([
     listOffshoreStints(),
-    supabase.from('manifest_request_items').select('replacing_employee_id,manifest_request_id'),
+    supabase
+      .from('manifest_request_items')
+      .select('employee_id,replacing_employee_id,manifest_request_id'),
     supabase
       .from('replacement_pairings')
-      .select('outgoing_employee_id,status,consumed_at,retry_of_pairing_id,created_at,updated_at'),
+      .select(
+        'incoming_employee_id,outgoing_employee_id,status,consumed_at,retry_of_pairing_id,' +
+          'created_at,updated_at,rfm_line_item:rfm_line_items(rfm:rfms(sortie_date))'
+      ),
   ])
   const error = stintRes.error || mriRes.error || pairRes.error
   if (error) return { error }
