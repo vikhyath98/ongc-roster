@@ -1813,6 +1813,26 @@ code {
   text-align: center;
 }
 
+/* Manifest tab: secondary Board/Requests/RFMs nav (top-right links). */
+.manifest-tab__nav {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.manifest-tab__nav--on {
+  color: var(--navy);
+  text-decoration: underline;
+}
+
+/* Flow B status-column tabs: let the four column buttons scroll if narrow. */
+.manifest-board__cols {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ---------- Boarding ---------- */
 .board-controls {
   display: grid;

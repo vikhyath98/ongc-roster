@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listManifestRequests, createManifestRequest } from '../../lib/manifest'
-import { loadCandidates } from '../../lib/reserve'
+import { loadCandidates, splitReplacementGroups } from '../../lib/reserve'
 import { listInstallations, listDesignations } from '../../lib/reference'
 import { listInstallationRequirements } from '../../lib/configAdmin'
 import { listOffshoreStints } from '../../lib/boarding'
@@ -125,7 +125,7 @@ export default function ManifestRequests({ userId }) {
   )
 }
 
-function NewRequestModal({
+export function NewRequestModal({
   open,
   userId,
   installations,
@@ -134,6 +134,8 @@ function NewRequestModal({
   designations,
   offshore,
   thresholds,
+  seedOutgoing = [], // stints pre-selected on the Board to be relieved
+  mode = 'new', // 'new' | 'retry' (affects labels only; lib auto-chains retries)
   onClose,
   onCreated,
 }) {
@@ -141,17 +143,31 @@ function NewRequestModal({
   const [requestDate, setRequestDate] = useState(todayISO())
   const [notes, setNotes] = useState('')
   const [items, setItems] = useState([])
+  // One row per pre-seeded outgoing employee, each awaiting a confirmed incoming.
+  const [seedRows, setSeedRows] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  const seeded = seedOutgoing.length > 0
+
   useEffect(() => {
     if (!open) return
-    setInstallationId('')
+    setInstallationId(seeded ? seedOutgoing[0]?.installation_id ?? '' : '')
     setRequestDate(todayISO())
     setNotes('')
     setItems([])
+    setSeedRows(
+      seedOutgoing.map((s) => ({
+        outgoingId: s.employee.id,
+        outgoingName: s.employee.full_name,
+        designationName: s.employee.designation?.name ?? '',
+        category: s.employee.designation?.category?.name ?? null,
+        incomingId: '',
+      }))
+    )
     setBusy(false)
     setError('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   // Names for the staged-items display.
@@ -162,25 +178,43 @@ function NewRequestModal({
     return m
   }, [candidates, offshore])
 
-  // Employees already used (incoming or outgoing) across staged items.
+  // Employees already used (incoming or outgoing) across seed rows + staged items.
   const usedIds = useMemo(() => {
     const s = new Set()
+    for (const r of seedRows) {
+      s.add(r.outgoingId)
+      if (r.incomingId) s.add(r.incomingId)
+    }
     for (const it of items) {
       s.add(it.employeeId)
       if (it.replacingEmployeeId) s.add(it.replacingEmployeeId)
     }
     return s
-  }, [items])
+  }, [seedRows, items])
+
+  // Confirmed-ready incoming options for a seed row, by the outgoing's tier.
+  function incomingOptionsFor(row) {
+    const confirmed = splitReplacementGroups(candidates, row.category).confirmed
+    return confirmed.filter((c) => !usedIds.has(c.id) || c.id === row.incomingId)
+  }
+  const setSeedIncoming = (idx, incomingId) =>
+    setSeedRows((rows) => rows.map((r, i) => (i === idx ? { ...r, incomingId } : r)))
 
   const removeItem = (i) => setItems((list) => list.filter((_, idx) => idx !== i))
-  const canCreate = installationId && requestDate && items.length > 0 && !busy
+
+  // Final line items = assigned seed rows + any ad-hoc picker items.
+  const seedItems = seedRows
+    .filter((r) => r.incomingId)
+    .map((r) => ({ employeeId: r.incomingId, replacingEmployeeId: r.outgoingId }))
+  const allItems = [...seedItems, ...items]
+  const canCreate = installationId && requestDate && allItems.length > 0 && !busy
 
   async function create() {
     setBusy(true)
     setError('')
     const { error: err } = await createManifestRequest(
       { installationId, requestDate, notes, requestedBy: userId },
-      items
+      allItems
     )
     setBusy(false)
     if (err) {
@@ -193,7 +227,7 @@ function NewRequestModal({
   return (
     <Modal
       open={open}
-      title="New manifest request"
+      title={mode === 'retry' ? 'Create retry request' : 'New manifest request'}
       onClose={onClose}
       footer={
         <>
@@ -201,7 +235,7 @@ function NewRequestModal({
             Cancel
           </button>
           <button type="button" className="btn btn--primary" disabled={!canCreate} onClick={create}>
-            {busy ? 'Creating…' : `Create request${items.length ? ` (${items.length})` : ''}`}
+            {busy ? 'Creating…' : `Create request${allItems.length ? ` (${allItems.length})` : ''}`}
           </button>
         </>
       }
@@ -209,7 +243,11 @@ function NewRequestModal({
       <div className="board-controls">
         <label className="field">
           <span>Installation *</span>
-          <select value={installationId} onChange={(e) => setInstallationId(e.target.value)}>
+          <select
+            value={installationId}
+            onChange={(e) => setInstallationId(e.target.value)}
+            disabled={seeded}
+          >
             <option value="">Select…</option>
             {installations.map((i) => (
               <option key={i.id} value={i.id}>
@@ -227,6 +265,46 @@ function NewRequestModal({
         <span>Notes (optional)</span>
         <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </label>
+
+      {seeded && (
+        <>
+          <h3 className="section-heading">Relieving ({seedRows.length})</h3>
+          <ul className="card-list">
+            {seedRows.map((r, i) => {
+              const opts = incomingOptionsFor(r)
+              return (
+                <li key={r.outgoingId}>
+                  <div className="roster-card roster-card--col">
+                    <div className="emp-card__main">
+                      <span className="emp-card__name">{r.outgoingName}</span>
+                      <span className="emp-card__meta">{r.designationName} · needs a confirmed relief</span>
+                    </div>
+                    <label className="field">
+                      <span>Incoming (confirmed only)</span>
+                      <select
+                        value={r.incomingId}
+                        onChange={(e) => setSeedIncoming(i, e.target.value)}
+                      >
+                        <option value="">— select relief —</option>
+                        {opts.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.full_name} — {c.designation?.name ?? '—'}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {opts.length === 0 && r.incomingId === '' && (
+                      <span className="reserve-sub reserve-sub--block">
+                        No confirmed relief available for this tier — confirm availability first.
+                      </span>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
 
       {items.length > 0 && (
         <>
