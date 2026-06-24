@@ -421,10 +421,9 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 
 ## 17. Phase 3 — Workstreams I–O
 
-> **Status:** Workstreams **I, J, and L are built, tested, and pushed** (details in
-> each subsection); **K, M, N, O remain spec-only.** **K is next** in build order —
-> note that **M is a prerequisite for N and O**, so sequencing past K will be
-> revisited. This phase layers cross-tier replacement, a NEDP attribute, a
+> **Status:** Workstreams **I, J, L, and K are built, tested, and pushed** (details in
+> each subsection); **M, N, O remain spec-only.** **M is next** in build order and is
+> a **prerequisite for N and O**. This phase layers cross-tier replacement, a NEDP attribute, a
 > status-column board, a structured call log, a role system, the CM return-manifest
 > workflow, and a read-only ONGC Head view on top of the feature-complete §14
 > system. Build order is at the end.
@@ -500,6 +499,34 @@ view. The **Offboard** tab is unchanged.
   - Needs manifest → **Create manifest request**
   - Retry needed → **Create retry manifest request**
 - **CM view (toggle):** scoped to **return manifests only** (see §17.N).
+
+**Status: BUILT, TESTED (pending), AND PUSHED** (commits `2e394e8` shared pipeline
+classifier + alerts.js refactor, `0aa630e` Flow B status-column board, `c366b6b` NEDP
+expiring warning on finder cards, `6374418` base-side card orientation + layout fix).
+
+**Final orientation — base-side.** The board cards are the **incoming (relief)
+employees** — the base manager's mental model of who they are sending — with the
+offshore employee being relieved shown as context ("Replacing → [name], [installation]
+· [days]d", or "Not yet paired"). Columns are classified by `classifyBaseEmployee` (the
+incoming-side mirror of `classifyOffshoreEmployee`, keyed on `incoming_employee_id` /
+`manifest_request_items.employee_id`):
+- **To manifest** — confirmed-ready base staff not yet named on any manifest item.
+- **Filed / RFM** — named on a manifest item, pairing `pending` / `rfm_listed`.
+- **Boarded** — pairing `boarded` with `consumed_at` null (offshore now).
+- **Retry needed** — most recent pairing `dropped` / `no_show`, no boarded successor.
+
+**To manifest** and **Retry needed** support batch select → "Create manifest request" /
+"Create retry request"; the retry action **pre-locks each relief's original outgoing**
+from its failed pairing (falling back to the open picker if none is found). Requests,
+RFMs, and Manual onboard remain reachable via the secondary nav; the **Offboard tab is
+untouched**. **Dashboard alerts stay outgoing-oriented** — `alerts.js` and
+`classifyOffshoreEmployee` are unchanged; `classifyBaseEmployee` is board-only. The
+deferred §17.J **"NEDP expiring" finder warning** landed here.
+
+Deferred: the **CM view toggle** → Workstreams M + N (needs the role system + return
+manifests). **Auto-split of a cross-installation "To manifest" selection** is also
+deferred — those reliefs are unpaired (no outgoing yet) so carry no installation context
+to split on; the manager picks one installation in the modal for now.
 
 ### 17.L — Call log
 
