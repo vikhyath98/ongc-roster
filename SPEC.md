@@ -421,9 +421,9 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 
 ## 17. Phase 3 — Workstreams I–O
 
-> **Status:** Workstreams **I, J, L, and K are built, tested, and pushed** (details in
-> each subsection); **M, N, O remain spec-only.** **M is next** in build order and is
-> a **prerequisite for N and O**. This phase layers cross-tier replacement, a NEDP attribute, a
+> **Status:** Workstreams **I, J, L, K, and M are built, tested, and pushed** (details in
+> each subsection); **N and O remain spec-only.** **N is next** in build order (M, its
+> prerequisite, is done). This phase layers cross-tier replacement, a NEDP attribute, a
 > status-column board, a structured call log, a role system, the CM return-manifest
 > workflow, and a read-only ONGC Head view on top of the feature-complete §14
 > system. Build order is at the end.
@@ -583,6 +583,18 @@ Three roles plus the existing Admin; role stored on `app_users`; UI gates by rol
   read-only roster for their installation; no penalty / reports / Employee Master
   edit access.
 - **ongc_head** — **ONGC Head view only** (read-only).
+
+**Status: BUILT, TESTED (pending), AND PUSHED** (commits `5ce0ce4` migration 0010 —
+widen the role check to the four roles, migrate legacy `manager` → `hr_manager`, default
+new signups to `hr_manager` (column default; `handle_new_user` sets no role), add
+`app_users.installation_id`; `665f6be` role gating scaffold). `hasRole(profile, ...roles)`
+gates routes and nav with **admin always passing**; `RoleRoute` redirects each role to its
+landing (catering_manager → `/cm`, ongc_head → `/ongc-head`, hr_manager/admin → `/`).
+Bottom nav + drawer are filtered per role; the **catering_manager Roster is read-only and
+scoped to their `installation_id`** (no Find Replacement / call / confirm / select). Roles
+are assigned **directly in Supabase** — no in-app role UI in M. Gating is **UI-level only**
+(RLS stays open per §2/§16). Deferred: the **CM view content → Workstream N** and the
+**ONGC Head view content → Workstream O** (both are placeholder screens for now).
 
 ### 17.N — Return manifest (CM workflow)
 
