@@ -421,11 +421,13 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 
 ## 17. Phase 3 — Workstreams I–O
 
-> **Status:** Workstreams **I and J are built, tested, and pushed** (details in
-> each subsection); **K–O remain spec-only.** This phase layers cross-tier
-> replacement, a NEDP attribute, a status-column board, a structured call log, a
-> role system, the CM return-manifest workflow, and a read-only ONGC Head view on
-> top of the feature-complete §14 system. Build order is at the end.
+> **Status:** Workstreams **I, J, and L are built, tested, and pushed** (details in
+> each subsection); **K, M, N, O remain spec-only.** **K is next** in build order —
+> note that **M is a prerequisite for N and O**, so sequencing past K will be
+> revisited. This phase layers cross-tier replacement, a NEDP attribute, a
+> status-column board, a structured call log, a role system, the CM return-manifest
+> workflow, and a read-only ONGC Head view on top of the feature-complete §14
+> system. Build order is at the end.
 >
 > **Numbering note:** the owner's request labelled this "§15 Phase 3"; since §15
 > (Open items) and §16 (Deferred) already exist, it is filed here as §17 to avoid a
@@ -529,6 +531,20 @@ view. The **Offboard** tab is unchanged.
   total calls to confirm, no-shows, on-time arrival rate (`commitment_date` vs actual
   `sign_on` from `rotation_log`), and avg rest days between stints. Sortable columns,
   download `.xlsx`.
+
+**Status: BUILT, TESTED (pending), AND PUSHED** (commits `4d08ff2` migration 0009 —
+`call_log` extended (nullable outcome, `unreachable`, commitment fields), `19975d6`
+Model A two-step call flow + Check history, `b2e75d2` Call Performance Report). The
+`call_log` conflict was resolved by **extending** the existing table, not creating a
+new one. Decisions locked: kept `call_back` spelling (+ added `unreachable`); no-shows
+counted from `rfm_line_items.outcome='no_show'` in the last 365 days; on-time = a
+confirmed call's commitment date paired to the nearest following `sign_on` within
+30 days. Three items deferred:
+- The **Base-staff CallDialog UI is unchanged** — it still uses the single-shot path
+  via the deprecated `logCall` wrapper; its Model A rebuild is part of **Workstream K**.
+- The **"NEDP expiring" warning on Find Replacement candidate cards** remains
+  **deferred to Workstream K** (carried over from §17.J).
+- The **`call_back` outcome label stays as-is** for now (not renamed to `callback`).
 
 ### 17.M — Role system (prerequisite for N and O)
 
