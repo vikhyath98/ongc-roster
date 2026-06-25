@@ -10,6 +10,14 @@ import { loadOverdueAlerts } from './returnManifest'
 
 const FAILED = ['dropped', 'no_show']
 
+// A timestamptz is stored in UTC; slicing it raw can read the wrong calendar
+// date for outcomes recorded midnight–5:30am IST. Shift into IST (+5:30, no DST)
+// before taking the date. Same bug class as eb17e66 (addDays IST offset fix).
+const toISTDate = (ts) => {
+  if (!ts) return ''
+  return new Date(new Date(ts).getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
 // Days-waiting escalation for "Awaiting re-manifest" (§14.7): 0–2 neutral,
 // 3–5 amber, 6+ red.
 export function waitSeverity(days) {
@@ -59,7 +67,7 @@ export async function loadManifestAlerts({
     if (!FAILED.includes(line.outcome)) continue
     const emp = empById.get(empId)
     if (!emp || emp.employment_status !== 'active' || emp.current_installation_id) continue
-    const failedDate = line.stamp.slice(0, 10)
+    const failedDate = toISTDate(line.stamp)
     const signedOn = latestSignOn.get(empId)
     if (signedOn && failedDate && signedOn > failedDate) continue // boarded since
     const daysWaiting = failedDate ? Math.max(0, daysBetween(failedDate, today)) : 0
