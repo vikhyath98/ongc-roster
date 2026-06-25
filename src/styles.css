@@ -509,6 +509,11 @@ code {
   color: #a4231a;
 }
 
+.pill--info {
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+}
+
 /* ---------- Modal / sheet ---------- */
 .modal-backdrop {
   position: fixed;
@@ -2327,4 +2332,15 @@ code {
 }
 .ongc-card__foot {
   font-size: 0.68rem;
+}
+/* Drill-down pill + overstay sub-note stack to the right of each row. */
+.ongc-pill-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.ongc-pill-note {
+  font-size: 0.66rem;
+  text-align: right;
 }

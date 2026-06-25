@@ -16,10 +16,12 @@ const inr = new Intl.NumberFormat('en-IN', {
 const TYPE_LABEL = { platform: 'Platform', rig: 'Rig' }
 
 // Manifest status pill for the drill-down (from classifyOffshoreEmployee).
+// 'boarded' means the relief has arrived but the outgoing person is still aboard
+// awaiting return transport — i.e. an overstay, hence the red pill + sub-note.
 const MANIFEST_PILL = {
   needs_manifest: { cls: 'pill--warn', label: 'Needs manifest' },
-  filed: { cls: 'pill--muted', label: 'Filed / RFM' },
-  boarded: { cls: 'pill--ok', label: 'Boarded' },
+  filed: { cls: 'pill--info', label: 'Filed / RFM' },
+  boarded: { cls: 'pill--bad', label: 'Overstay', note: 'Relief aboard, offboard pending' },
   retry: { cls: 'pill--bad', label: 'Retry needed' },
 }
 
@@ -78,7 +80,8 @@ export default function OngcHeadView() {
               <span className="ongc-card__type">{TYPE_LABEL[c.type] ?? c.type}</span>
             </div>
             <div className="ongc-card__pob">
-              <strong>{c.personsOnBoard}</strong> aboard
+              <strong>{c.personsOnBoard}</strong>
+              {c.totalRequired > 0 ? ` / ${c.totalRequired} present` : ' present'}
             </div>
             <div className="ongc-card__health">
               <span className="ongc-chip">🟢 {c.green}</span>
@@ -132,11 +135,14 @@ export default function OngcHeadView() {
                           <span className="emp-card__name">{e.name}</span>
                         </div>
                         <div className="roster-card__side">
-                          {pill ? (
-                            <span className={`pill ${pill.cls}`}>{pill.label}</span>
-                          ) : (
-                            <span className="pill pill--muted">On track</span>
-                          )}
+                          <span className="ongc-pill-stack">
+                            {pill ? (
+                              <span className={`pill ${pill.cls}`}>{pill.label}</span>
+                            ) : (
+                              <span className="pill pill--muted">On track</span>
+                            )}
+                            {pill?.note && <span className="ongc-pill-note muted">{pill.note}</span>}
+                          </span>
                           <span className="roster-card__days">
                             <strong>{e.days}</strong>d
                           </span>

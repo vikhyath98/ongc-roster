@@ -14,7 +14,8 @@ import { daysInclusive, todayISO } from './dates'
 // (name + days served + manifest status only — no PII beyond that, §17.O).
 export async function loadOngcHeadData() {
   const today = todayISO()
-  const [instRes, stintRes, mriRes, pairRes, expRes, recRes, attrRes, cfgRes] = await Promise.all([
+  const [instRes, stintRes, mriRes, pairRes, expRes, recRes, attrRes, reqRes, cfgRes] =
+    await Promise.all([
     listInstallations(), // all sites, no activeOnly filter — show all 14
     listOffshoreStints(),
     supabase.from('manifest_request_items').select('employee_id,replacing_employee_id'),
@@ -31,6 +32,7 @@ export async function loadOngcHeadData() {
         'rotation_log_id,segment_1_days,segment_1_attribution,segment_2_days,segment_2_attribution,' +
           'rotation_log:rotation_log(installation_id)'
       ),
+    supabase.from('installation_requirements').select('installation_id,required_count'),
     getAppConfig(),
   ])
   const error =
@@ -41,6 +43,7 @@ export async function loadOngcHeadData() {
     expRes.error ||
     recRes.error ||
     attrRes.error ||
+    reqRes.error ||
     cfgRes.error
   if (error) return { error }
 
@@ -83,6 +86,15 @@ export async function loadOngcHeadData() {
     disputeByInst.set(instId, (disputeByInst.get(instId) ?? 0) + ongcDays * rate)
   }
 
+  // Required headcount per installation = sum of its designation requirements.
+  const requiredByInst = new Map()
+  for (const r of reqRes.data ?? []) {
+    requiredByInst.set(
+      r.installation_id,
+      (requiredByInst.get(r.installation_id) ?? 0) + Number(r.required_count || 0)
+    )
+  }
+
   // Group open stints by installation: headcount, green/amber/red bands, and the
   // drill-down roster (name + days + manifest status only).
   const buckets = new Map()
@@ -115,6 +127,7 @@ export async function loadOngcHeadData() {
       name: inst.name,
       type: inst.type,
       personsOnBoard: b.personsOnBoard,
+      totalRequired: requiredByInst.get(inst.id) ?? 0,
       green: b.green,
       amber: b.amber,
       red: b.red,
