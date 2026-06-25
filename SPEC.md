@@ -637,7 +637,8 @@ Read-only dashboard. A grid of **14 installation cards**.
   expected dispute amount (ONGC-attributed days × rate).
 - **Drill-down (tap a card):** list of employees at that installation with days served
   and manifest status.
-- **No actions. No employee PII beyond name and days served.**
+- **No actions. No employee PII beyond name, designation, and days served** (designation
+  added as a deliberate post-build refinement so the ONGC Head can read the roster mix).
 
 **Status: BUILT, TESTED (pending), AND PUSHED** (commit `e5acda3`). `lib/ongcHead.js`
 `loadOngcHeadData()` assembles one card per installation from existing tables/views (no
@@ -649,7 +650,9 @@ through `rotation_log` for the **expected dispute** (ONGC-attributed days × the
 card carries an "excl. active overstays" footnote). Bands: green `< warning_day`, amber
 `warning_day..max_service_days`, red `≥ max_service_days`. `OngcHeadView.jsx` is a 2-col
 scrollable grid; tapping a card opens a drill-down Modal listing aboard employees with
-**name + days served + manifest status only** (`classifyOffshoreEmployee`) — no other PII.
+**name + designation + days served + manifest status** (`classifyOffshoreEmployee`) — no
+other PII. (Designation was a deliberate post-build addition to the original "name + days"
+rule.)
 **Fully read-only, no actions**, reachable only by `ongc_head` (RoleRoute, §17.M). Rupee
 amounts use `Intl.NumberFormat('en-IN')`.
 
