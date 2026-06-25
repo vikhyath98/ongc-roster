@@ -2328,3 +2328,18 @@ code {
 .ongc-card__foot {
   font-size: 0.68rem;
 }
+
+/* Drill-down rows carry a left border in the employee's rotation band, tying
+   each person back to the card's 🟢🟡🔴 chips (§17.O ux). */
+.ongc-drill-row {
+  border-left-width: 4px;
+}
+.ongc-drill-row--red {
+  border-left-color: #dc2626;
+}
+.ongc-drill-row--amber {
+  border-left-color: #d97706;
+}
+.ongc-drill-row--green {
+  border-left-color: #16a34a;
+}

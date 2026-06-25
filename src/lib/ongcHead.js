@@ -94,12 +94,18 @@ export async function loadOngcHeadData() {
     const b = buckets.get(instId)
     if (!b) continue
     const days = daysInclusive(s.sign_on_date, today)
+    // Single source of truth for the band: the card chip counts and each
+    // drill-down row's border both come from this.
+    const band = days >= max ? 'red' : days >= warning ? 'amber' : 'green'
     b.personsOnBoard++
-    if (days >= max) b.red++
-    else if (days >= warning) b.amber++
-    else b.green++
+    b[band]++
     const cls = classifyOffshoreEmployee(s, { manifestItems, pairings, warningDay: warning, today })
-    b.employees.push({ name: s.employee?.full_name ?? '—', days, manifestStatus: cls?.column ?? null })
+    b.employees.push({
+      name: s.employee?.full_name ?? '—',
+      days,
+      band,
+      manifestStatus: cls?.column ?? null,
+    })
   }
 
   const cards = installations.map((inst) => {

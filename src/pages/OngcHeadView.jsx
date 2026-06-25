@@ -119,7 +119,7 @@ export default function OngcHeadView() {
                 const pill = e.manifestStatus ? MANIFEST_PILL[e.manifestStatus] : null
                 return (
                   <li key={i}>
-                    <div className="roster-card roster-card--col">
+                    <div className={`roster-card roster-card--col ongc-drill-row ongc-drill-row--${e.band}`}>
                       <div className="roster-card__row">
                         <div className="emp-card__main">
                           <span className="emp-card__name">{e.name}</span>
