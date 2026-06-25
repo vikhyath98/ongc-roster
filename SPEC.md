@@ -421,12 +421,12 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 
 ## 17. Phase 3 — Workstreams I–O
 
-> **Status:** Workstreams **I, J, L, K, M, N, and O are all built, tested, and pushed**
+> **Status:** Workstreams **I, J, L, K, M, N, O, and P are all built, tested, and pushed**
 > (details in each subsection). **Phase 3 is feature-complete** pending final testing and
 > any follow-up items. This phase layered cross-tier replacement, a NEDP attribute, a
 > status-column board, a structured call log, a role system, the CM return-manifest
-> workflow, and a read-only ONGC Head view on top of the feature-complete §14
-> system. Build order is at the end.
+> workflow, a read-only ONGC Head view, and file upload (photos + document scans) on top
+> of the feature-complete §14 system. Build order is at the end.
 >
 > **Numbering note:** the owner's request labelled this "§15 Phase 3"; since §15
 > (Open items) and §16 (Deferred) already exist, it is filed here as §17 to avoid a
@@ -658,7 +658,32 @@ amounts use `Intl.NumberFormat('en-IN')`.
 
 ### 17.x — Build order & deferrals
 
-- **Order:** I → J → L → K → M → N → O. **All built, tested, and pushed — Phase 3 is
+- **Order:** I → J → L → K → M → N → O → P. **All built, tested, and pushed — Phase 3 is
   feature-complete** pending final testing.
-- **P — File upload — deferred.** Needs a Supabase Storage bucket provisioned
-  separately from the app build.
+
+### 17.P — File upload (identity photos + document scans)
+
+Files live in the Supabase Storage bucket **`employee-documents`** (created out of band);
+rows store only the object **path**, and the browser only ever sees short-lived **signed
+URLs** (1 h) — raw paths are never exposed.
+
+- **Schema (migration 0013):** `employees.photo_path text` (nullable),
+  `employee_documents.file_path text` (nullable). No constraints.
+- **`lib/storage.js`:** `uploadEmployeePhoto` / `uploadDocumentScan` (both `upsert:true`
+  so a replacement never orphans the prior object; each records the path on its row),
+  `getSignedUrl(path, expiresInSeconds=3600)`, `deleteFile`. Paths:
+  `{employeeId}/photo/{file.name}` and `{employeeId}/docs/{documentTypeId}/{file.name}`.
+- **Identity photo:** added on the **edit** employee form only (the row must exist),
+  uploaded **immediately on file select** (not on save), 5 MB client-side cap,
+  `image/jpeg,png,heic`. Shown as a 60 px circular avatar on the form + detail panel and a
+  32 px avatar on the employee-list cards (signed URLs fetched per-avatar, resolving
+  progressively; no-photo cards are unchanged).
+- **Document scans:** a **📎 Scan** / **📎 Replace** + **📎 View** control on each row of
+  the document checklist (`image/jpeg,png,pdf`, 5 MB cap). Scanning a doc with no row yet
+  creates the `employee_documents` row first to attach `file_path`. View opens a fresh
+  signed URL in a new tab.
+- **Import template is unchanged** — file upload does not touch it (the original §17
+  deferral noted this).
+
+**Status: BUILT, TESTED (pending), AND PUSHED** (commit `0773b46` migration 0013,
+`0b3809f` storage lib + UI).
