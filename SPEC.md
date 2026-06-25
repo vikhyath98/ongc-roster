@@ -421,9 +421,9 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 
 ## 17. Phase 3 — Workstreams I–O
 
-> **Status:** Workstreams **I, J, L, K, and M are built, tested, and pushed** (details in
-> each subsection); **N and O remain spec-only.** **N is next** in build order (M, its
-> prerequisite, is done). This phase layers cross-tier replacement, a NEDP attribute, a
+> **Status:** Workstreams **I, J, L, K, M, and N are built, tested, and pushed** (details in
+> each subsection); **O remains spec-only.** **O is next** in build order (its
+> prerequisites are done). This phase layers cross-tier replacement, a NEDP attribute, a
 > status-column board, a structured call log, a role system, the CM return-manifest
 > workflow, and a read-only ONGC Head view on top of the feature-complete §14
 > system. Build order is at the end.
@@ -602,14 +602,31 @@ The primary **Segment 2 prevention** mechanism (return transport after relief ar
 
 - **Trigger:** when an incoming replacement's RFM line is logged **Boarded**, a
   `return_manifest_task` is created for the **outgoing** employee:
-  - `deadline = Boarded_date + 1 day at 12:00 IST`
+  - `deadline = Boarded timestamp + 36 hours`
   - `status = pending`
 - The CM sees these tasks in their view (§17.K CM toggle). **Actions:** *File return
   manifest* (logs the ONGC return RFM number + sortie date) or *Mark as submitted*
   with a reason.
-- **Missed deadline** (past 12:00 the next day, still pending):
+- **Missed deadline** (past the 36-hour deadline, still pending):
   - An alert fires to **hr_manager** on the Dashboard.
   - The CM must submit a reason before the task can be closed.
+
+**Status: BUILT, TESTED (pending), AND PUSHED** (commit `5294acb` migration 0012 —
+`return_manifest_tasks` + the backfilled `app_user_installations` junction that M
+created by hand in Supabase but never migrated; `34b0b1c` return-manifest flow). The
+trigger is **app-side** in `recordRfmOutcome` (after the pairing flips to `boarded`) and
+**also `manualOnboard`** — a manual-exception boarding strands the outgoing employee just
+the same, so it opens the same task. Both calls are **fire-and-forget**: a failure logs
+but never fails the boarding, and a UNIQUE index on `replacement_pairing_id` makes a
+repeated boarded outcome a harmless no-op. `deadline` is computed by
+`returnManifestDeadline` (boarded timestamp + 36 hours). The CM view
+(`CMView.jsx`) is installation-scoped via `profile.installations` → `loadReturnTasks(ids)`
+with three sections (Overdue / Upcoming / Completed); **File return manifest** logs the
+return RFM number + sortie date (`status='filed'`), **Submit reason** (offered only once
+overdue) closes with a reason (`status='submitted'`, JS-guarded to `pending` only). The
+hr_manager Dashboard alert is gated behind `loadManifestAlerts({ includeReturnAlerts:
+true })` so the CM path can never surface it. **UI-level gating only** (RLS stays open per
+§2/§16). Deferred: nothing — N is complete.
 
 ### 17.O — ONGC Head view
 
