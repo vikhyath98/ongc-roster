@@ -114,6 +114,7 @@ export async function loadOngcHeadData() {
     const cls = classifyOffshoreEmployee(s, { manifestItems, pairings, warningDay: warning, today })
     b.employees.push({
       name: s.employee?.full_name ?? '—',
+      designation: s.employee?.designation?.name ?? '—',
       days,
       band,
       manifestStatus: cls?.column ?? null,

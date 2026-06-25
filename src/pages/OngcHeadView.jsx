@@ -133,6 +133,7 @@ export default function OngcHeadView() {
                       <div className="roster-card__row">
                         <div className="emp-card__main">
                           <span className="emp-card__name">{e.name}</span>
+                          <span className="emp-card__meta">{e.designation}</span>
                         </div>
                         <div className="roster-card__side">
                           <span className="ongc-pill-stack">
