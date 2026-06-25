@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   listEmployeeDocuments,
   upsertEmployeeDocument,
@@ -6,6 +6,9 @@ import {
   docState,
   suggestedExpiry,
 } from '../lib/documents'
+import { uploadDocumentScan, getSignedUrl } from '../lib/storage'
+
+const MAX_SCAN_BYTES = 5 * 1024 * 1024 // 5 MB
 
 const STATE_PILL = {
   'verified-current': { cls: 'pill--ok', label: 'Verified' },
@@ -36,6 +39,51 @@ export default function EmployeeDocChecklist({ employee, docTypes, userId, onCha
   const [edits, setEdits] = useState({}) // docTypeId -> {status,issue,expiry}
   const [savingId, setSavingId] = useState(null)
   const [error, setError] = useState('')
+  const [scanningId, setScanningId] = useState(null) // docTypeId being uploaded
+  const [scanErr, setScanErr] = useState({}) // docTypeId -> message
+  const scanInputs = useRef({}) // docTypeId -> hidden <input>
+
+  // Attach (or replace) a document scan. Uploads immediately; if the document
+  // has no employee_documents row yet, create one first so we have an id to
+  // record file_path on.
+  async function onScanSelect(dt, empDoc, file) {
+    if (!file) return
+    setScanErr((s) => ({ ...s, [dt.id]: '' }))
+    if (file.size > MAX_SCAN_BYTES) {
+      setScanErr((s) => ({ ...s, [dt.id]: 'File too large (max 5 MB)' }))
+      return
+    }
+    setScanningId(dt.id)
+    let docId = empDoc?.id
+    if (!docId) {
+      const { data, error: cErr } = await upsertEmployeeDocument(
+        employee.id,
+        dt.id,
+        edits[dt.id] ?? blankEdit(),
+        userId
+      )
+      if (cErr || !data) {
+        setScanningId(null)
+        setScanErr((s) => ({ ...s, [dt.id]: 'Upload failed, try again.' }))
+        return
+      }
+      docId = data.id
+    }
+    const { error: upErr } = await uploadDocumentScan(employee.id, docId, dt.id, file)
+    setScanningId(null)
+    if (upErr) {
+      setScanErr((s) => ({ ...s, [dt.id]: 'Upload failed, try again.' }))
+      return
+    }
+    await load()
+    onChanged?.()
+  }
+
+  // Open a scan in a new tab via a fresh signed URL (never cached).
+  async function openScan(path) {
+    const url = await getSignedUrl(path)
+    if (url) window.open(url, '_blank', 'noopener')
+  }
 
   const applicable = applicableDocTypes(employee.designation_id, docTypes)
 
@@ -112,7 +160,8 @@ export default function EmployeeDocChecklist({ employee, docTypes, userId, onCha
         <p className="muted">No document requirements for this designation.</p>
       )}
       {applicable.map((dt) => {
-        const state = docState(dt, byType.get(dt.id))
+        const empDoc = byType.get(dt.id)
+        const state = docState(dt, empDoc)
         const pill = STATE_PILL[state]
         const edit = edits[dt.id] ?? blankEdit()
         return (
@@ -196,6 +245,36 @@ export default function EmployeeDocChecklist({ employee, docTypes, userId, onCha
               >
                 {savingId === dt.id ? 'Saving…' : isDirty(dt.id) ? 'Save' : 'Saved'}
               </button>
+
+              {empDoc?.file_path && (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => openScan(empDoc.file_path)}
+                >
+                  📎 View
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                disabled={scanningId === dt.id}
+                onClick={() => scanInputs.current[dt.id]?.click()}
+              >
+                {scanningId === dt.id ? 'Uploading…' : empDoc?.file_path ? '📎 Replace' : '📎 Scan'}
+              </button>
+              {scanErr[dt.id] && <span className="doc-card__scan-err">{scanErr[dt.id]}</span>}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,application/pdf"
+                hidden
+                ref={(el) => (scanInputs.current[dt.id] = el)}
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  e.target.value = ''
+                  onScanSelect(dt, empDoc, f)
+                }}
+              />
             </div>
           </div>
         )

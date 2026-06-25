@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
 import EmployeeDocChecklist from './EmployeeDocChecklist'
+import EmployeeAvatar from './EmployeeAvatar'
 import RotationHistory from './RotationHistory'
 import { computeCertStatus } from '../lib/documents'
 import { baseLocationTag } from '../lib/location'
@@ -105,6 +106,12 @@ export default function EmployeeDetail({
         </>
       }
     >
+      {employee.photo_path && (
+        <div className="detail-photo">
+          <EmployeeAvatar path={employee.photo_path} name={employee.full_name} size={60} />
+        </div>
+      )}
+
       <div className="detail-meta">
         <div>
           <span className="detail-meta__label">Employee ID</span>

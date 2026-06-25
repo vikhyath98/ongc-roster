@@ -2344,3 +2344,48 @@ code {
   font-size: 0.66rem;
   text-align: right;
 }
+
+/* Identity photos / document scans (§17.P). */
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.avatar--ph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  color: var(--muted);
+}
+.photo-edit {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.photo-edit__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.photo-edit__err {
+  font-size: 0.75rem;
+  color: #a4231a;
+}
+.detail-photo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.detail-photo .avatar {
+  border-radius: 50%;
+}
+.doc-card__scan-err {
+  font-size: 0.72rem;
+  color: #a4231a;
+  align-self: center;
+}

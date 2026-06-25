@@ -20,7 +20,7 @@ export async function listEmployeeDocuments(employeeId) {
   return supabase
     .from('employee_documents')
     .select(
-      'id,employee_id,document_type_id,status,issue_date,expiry_date,document_number,date_of_birth,verified_by,verified_at'
+      'id,employee_id,document_type_id,status,issue_date,expiry_date,document_number,date_of_birth,file_path,verified_by,verified_at'
     )
     .eq('employee_id', employeeId)
 }

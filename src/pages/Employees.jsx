@@ -7,6 +7,7 @@ import { nedpStatus, NEDP_PILL } from '../lib/nedp'
 import { getAppConfig, configInt } from '../lib/config'
 import EmployeeForm from '../components/EmployeeForm'
 import EmployeeDetail from '../components/EmployeeDetail'
+import EmployeeAvatar from '../components/EmployeeAvatar'
 import EmployeeImport from '../components/EmployeeImport'
 import BulkVerifyDocuments from '../components/BulkVerifyDocuments'
 import BulkConfirmAvailability from '../components/BulkConfirmAvailability'
@@ -223,6 +224,9 @@ export default function Employees() {
                         <span className={'pick-card__check' + (isSel ? ' pick-card__check--on' : '')}>
                           {isSel ? '✓' : ''}
                         </span>
+                      )}
+                      {e.photo_path && (
+                        <EmployeeAvatar path={e.photo_path} name={e.full_name} size={32} />
                       )}
                       <div className="emp-card__main">
                         <span className="emp-card__name">{e.full_name}</span>

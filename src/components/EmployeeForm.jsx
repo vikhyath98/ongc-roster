@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal'
 import { createEmployee, updateEmployee, onboardEmployee } from '../lib/employees'
+import { uploadEmployeePhoto, getSignedUrl } from '../lib/storage'
 import { useAuth } from '../context/AuthContext'
 import { todayISO, addDays } from '../lib/dates'
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024 // 5 MB
 
 const EMPTY = {
   emp_id: '',
@@ -37,6 +40,14 @@ export default function EmployeeForm({
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // Identity photo (edit mode only). Uploaded immediately on file select, not on
+  // form save — so we track the path/signed-URL separately from `form`.
+  const [photoUrl, setPhotoUrl] = useState(null)
+  const [photoPath, setPhotoPath] = useState(null)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoErr, setPhotoErr] = useState('')
+  const photoInputRef = useRef(null)
+
   // Reset the form whenever the modal opens or the target employee changes.
   // (Done in an effect, not during render, to avoid an add-mode render loop.)
   useEffect(() => {
@@ -61,6 +72,50 @@ export default function EmployeeForm({
     )
     setError('')
   }, [open, employee])
+
+  // Load the current photo's signed URL when the form opens for an existing
+  // employee. Cleared for add-mode (no photo until the row exists).
+  useEffect(() => {
+    setPhotoErr('')
+    if (!open || !employee?.id) {
+      setPhotoUrl(null)
+      setPhotoPath(null)
+      return
+    }
+    setPhotoPath(employee.photo_path ?? null)
+    if (!employee.photo_path) {
+      setPhotoUrl(null)
+      return
+    }
+    let active = true
+    getSignedUrl(employee.photo_path).then((u) => {
+      if (active) setPhotoUrl(u)
+    })
+    return () => {
+      active = false
+    }
+  }, [open, employee?.id, employee?.photo_path])
+
+  async function onPhotoSelect(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // let the same file be picked again after an error
+    if (!file) return
+    setPhotoErr('')
+    if (file.size > MAX_PHOTO_BYTES) {
+      setPhotoErr('File too large (max 5 MB)')
+      return
+    }
+    setPhotoBusy(true)
+    const { path, error: upErr } = await uploadEmployeePhoto(employee.id, file)
+    if (upErr || !path) {
+      setPhotoBusy(false)
+      setPhotoErr('Upload failed, try again.')
+      return
+    }
+    setPhotoPath(path)
+    setPhotoUrl(await getSignedUrl(path))
+    setPhotoBusy(false)
+  }
 
   const isEdit = Boolean(employee)
   // Already offshore => location is managed via the Boarding flow, not here.
@@ -133,6 +188,37 @@ export default function EmployeeForm({
       }
     >
       <form id="employee-form" onSubmit={handleSubmit} className="form-grid">
+        {/* Identity photo — edit mode only; uploads immediately on select. */}
+        {isEdit && (
+          <div className="photo-edit">
+            {photoUrl ? (
+              <img className="avatar" style={{ width: 60, height: 60 }} src={photoUrl} alt="Employee photo" />
+            ) : (
+              <span className="avatar avatar--ph" style={{ width: 60, height: 60 }} aria-hidden="true">
+                📷
+              </span>
+            )}
+            <div className="photo-edit__body">
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={photoBusy}
+              >
+                {photoBusy ? 'Uploading…' : photoPath ? 'Change photo' : 'Add photo'}
+              </button>
+              {photoErr && <span className="photo-edit__err">{photoErr}</span>}
+            </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/heic"
+              hidden
+              onChange={onPhotoSelect}
+            />
+          </div>
+        )}
+
         <label className="field">
           <span>Employee ID *</span>
           <input
