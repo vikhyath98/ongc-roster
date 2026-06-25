@@ -2251,3 +2251,80 @@ code {
   font-size: 0.78rem;
   color: #1c6e45;
 }
+
+/* ONGC Head view (§17.O): read-only 14-card installation grid. */
+.ongc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ongc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.ongc-card:active {
+  background: var(--bg);
+}
+.ongc-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.ongc-card__name {
+  font-weight: 700;
+  color: var(--navy);
+}
+.ongc-card__type {
+  font-size: 0.7rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.ongc-card__pob {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.ongc-card__health {
+  display: flex;
+  gap: 6px;
+}
+.ongc-chip {
+  font-size: 0.8rem;
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.ongc-card__money {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+.ongc-card__money div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ongc-card__money dt {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.ongc-card__money dd {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.ongc-card__foot {
+  font-size: 0.68rem;
+}
