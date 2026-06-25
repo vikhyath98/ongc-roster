@@ -421,9 +421,9 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 
 ## 17. Phase 3 — Workstreams I–O
 
-> **Status:** Workstreams **I, J, L, K, M, and N are built, tested, and pushed** (details in
-> each subsection); **O remains spec-only.** **O is next** in build order (its
-> prerequisites are done). This phase layers cross-tier replacement, a NEDP attribute, a
+> **Status:** Workstreams **I, J, L, K, M, N, and O are all built, tested, and pushed**
+> (details in each subsection). **Phase 3 is feature-complete** pending final testing and
+> any follow-up items. This phase layered cross-tier replacement, a NEDP attribute, a
 > status-column board, a structured call log, a role system, the CM return-manifest
 > workflow, and a read-only ONGC Head view on top of the feature-complete §14
 > system. Build order is at the end.
@@ -639,8 +639,23 @@ Read-only dashboard. A grid of **14 installation cards**.
   and manifest status.
 - **No actions. No employee PII beyond name and days served.**
 
+**Status: BUILT, TESTED (pending), AND PUSHED** (commit `e5acda3`). `lib/ongcHead.js`
+`loadOngcHeadData()` assembles one card per installation from existing tables/views (no
+migration): all 14 installations (`listInstallations()`, no `activeOnly`), open stints
+(`listOffshoreStints()`), `penalty_exposure` (open exposure = `finalised` and not in
+`penalty_log` as reconciled, summed per installation), and `overstay_attributions` joined
+through `rotation_log` for the **expected dispute** (ONGC-attributed days × the stint's
+`daily_penalty_rate`, summed per installation — attributed/offboarded stints only, so the
+card carries an "excl. active overstays" footnote). Bands: green `< warning_day`, amber
+`warning_day..max_service_days`, red `≥ max_service_days`. `OngcHeadView.jsx` is a 2-col
+scrollable grid; tapping a card opens a drill-down Modal listing aboard employees with
+**name + days served + manifest status only** (`classifyOffshoreEmployee`) — no other PII.
+**Fully read-only, no actions**, reachable only by `ongc_head` (RoleRoute, §17.M). Rupee
+amounts use `Intl.NumberFormat('en-IN')`.
+
 ### 17.x — Build order & deferrals
 
-- **Order:** I → J → L → K → M → N → O.
+- **Order:** I → J → L → K → M → N → O. **All built, tested, and pushed — Phase 3 is
+  feature-complete** pending final testing.
 - **P — File upload — deferred.** Needs a Supabase Storage bucket provisioned
   separately from the app build.
