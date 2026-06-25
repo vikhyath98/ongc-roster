@@ -129,6 +129,7 @@ export default function Dashboard() {
       stints: decoratedLocal,
       thresholds: th,
       today: todayISO(),
+      includeReturnAlerts: true, // hr_manager Dashboard only (§17.N)
     })
     if (!al.error) setAlerts(al)
     setLoading(false)
@@ -294,8 +295,9 @@ export default function Dashboard() {
   if (error) return <p className="banner banner--error">{error}</p>
 
   const awaitingCount = alerts ? alerts.awaitingDropped.length + alerts.awaitingNoShow.length : 0
+  const returnOverdue = alerts?.overdueReturnTasks ?? []
   const totalAlerts = alerts
-    ? awaitingCount + alerts.reliefFailed.length + alerts.manifestNeeded.length
+    ? awaitingCount + alerts.reliefFailed.length + alerts.manifestNeeded.length + returnOverdue.length
     : 0
 
   // One "Awaiting re-manifest" base-side row (relief that was dropped/no-showed).
@@ -534,6 +536,41 @@ export default function Dashboard() {
                             ＋ Create manifest request
                           </button>
                         )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {returnOverdue.length > 0 && (
+                <div className="dash-card">
+                  <div className="dash-card__head">
+                    <h3>⚠️ Return manifest overdue</h3>
+                    <span className="muted">{returnOverdue.length} past deadline</span>
+                  </div>
+                  <ul className="card-list">
+                    {returnOverdue.map((t) => (
+                      <li key={t.id}>
+                        <div className="roster-card roster-card--col">
+                          <div className="roster-card__row">
+                            <div className="emp-card__main">
+                              <span className="emp-card__name">
+                                {t.outgoing?.full_name ?? '—'}
+                              </span>
+                              <span className="emp-card__meta">
+                                {t.outgoing?.emp_id ?? '—'} · 📍 {t.installation?.name ?? '—'}
+                              </span>
+                              <span className="reserve-sub reserve-sub--block">
+                                Return manifest not filed — CM must file or give a reason
+                              </span>
+                            </div>
+                            <div className="roster-card__side">
+                              <span className="pill pill--bad">
+                                {t.hoursOverdue}h overdue
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </li>
                     ))}
                   </ul>

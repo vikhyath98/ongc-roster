@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { onboardEmployee } from './employees'
 import { addDays, todayISO } from './dates'
+import { createReturnTask } from './returnManifest'
 
 const OUTCOME_LABEL = { listed: 'Listed', boarded: 'Boarded', dropped: 'Dropped', no_show: 'No-show' }
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -329,14 +330,27 @@ export async function manualOnboard({
   if (flagErr) return { error: flagErr }
 
   if (relievingEmployeeId) {
-    const { error: pErr } = await supabase.from('replacement_pairings').insert({
-      manifest_request_item_id: null,
-      outgoing_employee_id: relievingEmployeeId,
-      incoming_employee_id: employeeId,
-      status: 'boarded',
-      relief_deadline: addDays(signOnDate, reliefGraceDays),
-    })
+    const { data: pairing, error: pErr } = await supabase
+      .from('replacement_pairings')
+      .insert({
+        manifest_request_item_id: null,
+        outgoing_employee_id: relievingEmployeeId,
+        incoming_employee_id: employeeId,
+        status: 'boarded',
+        relief_deadline: addDays(signOnDate, reliefGraceDays),
+      })
+      .select('id')
+      .single()
     if (pErr) return { error: pErr }
+    // §17.N: a manual-exception boarding also strands the outgoing employee —
+    // open the same return-manifest task. Fire-and-forget (see recordRfmOutcome).
+    const { error: rtErr } = await createReturnTask(
+      pairing.id,
+      relievingEmployeeId,
+      installationId,
+      new Date().toISOString()
+    )
+    if (rtErr) console.error('return task creation failed', rtErr)
   }
 
   return { error: null }
@@ -447,6 +461,16 @@ export async function recordRfmOutcome(
       })
       .eq('id', pairing.id)
     if (error) return { error }
+    // §17.N: open a return-manifest task for the outgoing employee. Fire-and-
+    // forget — a failure here must not fail the boarding (the UNIQUE index
+    // makes a repeat boarded outcome a harmless no-op).
+    const { error: rtErr } = await createReturnTask(
+      pairing.id,
+      pairing.outgoing_employee_id,
+      rfm.installation_id,
+      nowISO
+    )
+    if (rtErr) console.error('return task creation failed', rtErr)
   } else if (outcome === 'dropped' && pairing) {
     const { error } = await supabase
       .from('replacement_pairings')

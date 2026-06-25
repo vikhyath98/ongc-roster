@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { daysBetween, todayISO } from './dates'
 import { classifyOffshoreEmployee } from './manifestPipeline'
+import { loadOverdueAlerts } from './returnManifest'
 
 // Workstream D (SPEC.md §14.7): the three Dashboard manifestation alerts.
 // Takes the already-loaded employees + decorated offshore stints (each with a
@@ -17,7 +18,13 @@ export function waitSeverity(days) {
   return 'neutral'
 }
 
-export async function loadManifestAlerts({ employees, stints, thresholds, today = todayISO() }) {
+export async function loadManifestAlerts({
+  employees,
+  stints,
+  thresholds,
+  today = todayISO(),
+  includeReturnAlerts = false,
+}) {
   const [liRes, pairRes, mriRes, rotRes] = await Promise.all([
     supabase.from('rfm_line_items').select('employee_id,outcome,outcome_recorded_at,created_at'),
     supabase
@@ -89,5 +96,23 @@ export async function loadManifestAlerts({ employees, stints, thresholds, today 
   reliefFailed.sort((a, b) => b.stint.days - a.stint.days)
   manifestNeeded.sort((a, b) => b.stint.days - a.stint.days)
 
-  return { error: null, awaitingDropped, awaitingNoShow, reliefFailed, manifestNeeded }
+  // ---- Alert 4: Return manifest overdue (§17.N, hr_manager only) ----
+  // Gated behind includeReturnAlerts so the CM path can never surface it; only
+  // the Dashboard (hr_manager) opts in.
+  let overdueReturnTasks = []
+  if (includeReturnAlerts) {
+    const { data } = await loadOverdueAlerts()
+    overdueReturnTasks = (data ?? [])
+      .map((t) => ({ ...t, hoursOverdue: Math.floor((Date.now() - new Date(t.deadline).getTime()) / 3600000) }))
+      .sort((a, b) => b.hoursOverdue - a.hoursOverdue)
+  }
+
+  return {
+    error: null,
+    awaitingDropped,
+    awaitingNoShow,
+    reliefFailed,
+    manifestNeeded,
+    overdueReturnTasks,
+  }
 }

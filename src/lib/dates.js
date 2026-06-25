@@ -37,3 +37,12 @@ export function addDays(startISO, days) {
   d.setUTCDate(d.getUTCDate() + Number(days || 0))
   return d.toISOString().slice(0, 10)
 }
+
+// Return-manifest deadline (SPEC.md §17.N): 36 hours after the relief boarded.
+// The hour matters (not just the calendar day), so this is a flat offset off the
+// boarded instant, emitted as a UTC ISO timestamptz string.
+export function returnManifestDeadline(boardedAt) {
+  const boarded = new Date(boardedAt)
+  const deadline = new Date(boarded.getTime() + 36 * 60 * 60 * 1000)
+  return deadline.toISOString()
+}
