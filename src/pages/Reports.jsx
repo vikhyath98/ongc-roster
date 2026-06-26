@@ -38,6 +38,7 @@ export default function Reports() {
 
   // Call Performance Report
   const [callCount, setCallCount] = useState(null) // employees with ≥1 call in 12 mo
+  const [callRows, setCallRows] = useState([]) // full per-employee rows (for the in-app list)
   const [callDownloading, setCallDownloading] = useState(false)
   const [callError, setCallError] = useState('')
   const [callFlash, setCallFlash] = useState('')
@@ -75,7 +76,10 @@ export default function Reports() {
     })
     getCallPerformanceData().then((res) => {
       if (res.error) setCallError(res.error.message)
-      else setCallCount(res.rows.filter((r) => r.total_calls > 0).length)
+      else {
+        setCallRows(res.rows)
+        setCallCount(res.rows.filter((r) => r.total_calls > 0).length)
+      }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -279,6 +283,24 @@ export default function Reports() {
           </div>
         )}
         {callFlash && <p className="banner banner--info">{callFlash}</p>}
+
+        {callCount > 0 && (
+          <ul className="card-list">
+            {callRows
+              .filter((r) => r.total_calls > 0)
+              .map((r) => (
+                <li key={r.emp_id}>
+                  <div className="roster-card roster-card--col">
+                    <span className="emp-card__name">{r.full_name}</span>
+                    <span className="emp-card__meta">
+                      {r.total_calls} call{r.total_calls === 1 ? '' : 's'} · Called by:{' '}
+                      {r.callers.length ? r.callers.join(', ') : '—'}
+                    </span>
+                  </div>
+                </li>
+              ))}
+          </ul>
+        )}
         </>
         )}
       </div>

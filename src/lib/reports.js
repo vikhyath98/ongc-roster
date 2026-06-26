@@ -368,7 +368,7 @@ export async function getCallPerformanceData() {
   const [callRes, rotRes, nsRes] = await Promise.all([
     supabase
       .from('call_log')
-      .select('employee_id,outcome,commitment_date,called_at')
+      .select('employee_id,outcome,commitment_date,called_at,caller:app_users(full_name)')
       .in('employee_id', ids)
       .gte('called_at', cutoff),
     supabase
@@ -400,6 +400,8 @@ export async function getCallPerformanceData() {
     const totalCalls = calls.length
     const confirmedCalls = calls.filter((c) => c.outcome === 'confirmed').length
     const noShows = (noShowByEmp.get(e.id) ?? []).length
+    // Distinct managers who called this employee in the window.
+    const callers = [...new Set(calls.map((c) => c.caller?.full_name).filter(Boolean))]
 
     // On-time rate: among confirmed calls that have a commitment date, pair each
     // with the nearest stint that started on/after the call; on-time if that
@@ -436,6 +438,7 @@ export async function getCallPerformanceData() {
       no_shows: noShows,
       on_time_rate: onTimeRate,
       avg_rest_days: avgRest,
+      callers,
     }
   })
 
@@ -446,7 +449,7 @@ export async function getCallPerformanceData() {
 const CALLPERF_HEADERS = [
   'Emp ID', 'Full Name', 'Designation', 'Base Location Type',
   'Total Calls (12 mo)', 'Confirmed Calls', 'No-shows (12 mo)',
-  'On-time Rate (%)', 'Avg Rest Days Between Stints',
+  'On-time Rate (%)', 'Avg Rest Days Between Stints', 'Called By',
 ]
 
 export async function downloadCallPerformanceXlsx() {
@@ -461,6 +464,7 @@ export async function downloadCallPerformanceXlsx() {
       r.total_calls, r.confirmed_calls, r.no_shows,
       r.on_time_rate == null ? '' : r.on_time_rate,
       r.avg_rest_days == null ? '' : r.avg_rest_days,
+      (r.callers ?? []).join(', '),
     ])
   }
   const ws = XLSX.utils.aoa_to_sheet(aoa)
