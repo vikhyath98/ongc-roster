@@ -403,7 +403,7 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 - **Field grouping** (Tapti/B&S/South/North/NH) — parked, not built. A lightweight optional `field` label on installations could be added later purely for analytics/filtering; no logic should depend on it yet.
 - **No-show confirmation snapshot** — reversing a no-show correction does not restore the employee's prior `confirmed` value (it stays `false`); accepted as a minor, low-cost gap rather than adding a snapshot column.
 - **alerts.js Alert-1 wait-day calc** uses `slice(0,10)` on a raw UTC timestamp (same IST/UTC class as `eb17e66`) — only misfires for outcomes recorded midnight–5:30am IST, deferred to post-E fix.
-- **penalty_exposure.daily_penalty_rate** uses the current `app_config` rate, not a historical snapshot — attribution penalty amounts in the xlsx may diverge from `penalty_log` totals if the rate has changed since offboarding. Low priority fix: snapshot rate on `overstay_attributions` at record time.
+- ~~**penalty_exposure.daily_penalty_rate** uses the current `app_config` rate, not a historical snapshot — attribution penalty amounts may diverge from `penalty_log` totals if the rate has changed since offboarding.~~ **RESOLVED** (commit `7ed4231`, migration 0014): `overstay_attributions.daily_penalty_rate` snapshots the rate at attribution-record time; the ONGC Head dispute figure (and reports) prefer the snapshot, falling back to the live `app_config` rate only for pre-migration rows.
 
 ---
 
@@ -687,3 +687,21 @@ URLs** (1 h) — raw paths are never exposed.
 
 **Status: BUILT, TESTED (pending), AND PUSHED** (commit `0773b46` migration 0013,
 `0b3809f` storage lib + UI).
+
+### 17.z — Post-Phase-3 enhancements (shipped)
+
+Small follow-ups built after the I–P workstreams, all built/tested/pushed:
+
+- **Penalty-rate snapshot** (commit `7ed4231`, migration 0014) — resolves §15's
+  daily-rate drift item. `overstay_attributions.daily_penalty_rate numeric(10,2)` is
+  snapshotted at attribution time (`offboardChecks.js`); the ONGC Head dispute figure
+  prefers the snapshot, falling back to the live `app_config` rate only for pre-migration
+  rows (`ongcHead.js`).
+- **Alternate phone + native-dialler shortcut** (commit `efedcf7`, migration 0014) —
+  `employees.alternate_phone text`, surfaced on the employee form + detail panel. Candidate
+  cards in the replacement finder (`ReplaceSheet.jsx`) gain a 📞 Call `tel:` shortcut with a
+  Primary/Alternate dropdown (dropdown only when an alternate exists). This dialler link is
+  **separate from** the Model A "Call…" log button — it dials only, never writes `call_log`.
+- **Caller name in Call Performance Report** (commit `49b3ebc`, no migration) — the report
+  joins `call_log.called_by → app_users(full_name)`; each employee row carries the distinct
+  callers, shown in-app (Reports call-perf card) and as a "Called By" column in the xlsx.
