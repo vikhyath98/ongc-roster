@@ -13,11 +13,17 @@ export async function offboardConfig() {
     const n = Number(config?.[k])
     return Number.isFinite(n) ? n : 0
   }
+  // Penalty rate kept as a float (numeric(10,2) column) so a fractional rate
+  // snapshots faithfully; configInt would truncate it.
+  const penaltyRate = Number.isFinite(Number(config?.penalty_rate))
+    ? Number(config.penalty_rate)
+    : 1000
   return {
     min: configInt(config, 'min_service_days', 56),
     warning: configInt(config, 'warning_day', 65),
     max: configInt(config, 'max_service_days', 70),
     grace: configInt(config, 'relief_grace_period_days', 1),
+    penaltyRate,
     understayFixed: num('understay_fixed_cost'),
     understayDaily: num('understay_daily_rate'),
   }
@@ -144,6 +150,7 @@ export async function computeOverstay(stint, cfg, signOffDate) {
       seg2Days: 0,
       seg1Default,
       seg2Default: null,
+      dailyPenaltyRate: cfg.penaltyRate,
     }
   }
 
@@ -181,7 +188,16 @@ export async function computeOverstay(stint, cfg, signOffDate) {
   // Segment 2 (any post-relief delay) always defaults to ONGC.
   const seg2Default = seg2Days > 0 ? 'ongc' : null
 
-  return { pairingId: pairing.id, reliefArrival, hardThreshold, seg1Days, seg2Days, seg1Default, seg2Default }
+  return {
+    pairingId: pairing.id,
+    reliefArrival,
+    hardThreshold,
+    seg1Days,
+    seg2Days,
+    seg1Default,
+    seg2Default,
+    dailyPenaltyRate: cfg.penaltyRate,
+  }
 }
 
 // Persist the overstay attribution and consume the pairing.
@@ -205,6 +221,7 @@ export async function recordOverstay(
     segment_2_attribution: hasSeg2 ? seg2Attr : null,
     segment_2_overridden: seg2Changed,
     segment_2_remark: seg2Changed ? seg2Remark?.trim() || null : null,
+    daily_penalty_rate: result.dailyPenaltyRate ?? null,
     created_by: userId ?? null,
   })
   if (error) return { error }

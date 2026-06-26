@@ -30,7 +30,7 @@ export async function loadOngcHeadData() {
       .from('overstay_attributions')
       .select(
         'rotation_log_id,segment_1_days,segment_1_attribution,segment_2_days,segment_2_attribution,' +
-          'rotation_log:rotation_log(installation_id)'
+          'daily_penalty_rate,rotation_log:rotation_log(installation_id)'
       ),
     supabase.from('installation_requirements').select('installation_id,required_count'),
     getAppConfig(),
@@ -82,8 +82,10 @@ export async function loadOngcHeadData() {
     if (a.segment_1_attribution === 'ongc') ongcDays += a.segment_1_days || 0
     if (a.segment_2_attribution === 'ongc') ongcDays += a.segment_2_days || 0
     if (ongcDays === 0) continue
-    const rate = rateByStint.get(a.rotation_log_id) ?? 0
-    disputeByInst.set(instId, (disputeByInst.get(instId) ?? 0) + ongcDays * rate)
+    // Prefer the rate snapshotted at attribution time; fall back to the live
+    // penalty_exposure rate only for pre-migration rows (null snapshot).
+    const rate = a.daily_penalty_rate ?? rateByStint.get(a.rotation_log_id) ?? 0
+    disputeByInst.set(instId, (disputeByInst.get(instId) ?? 0) + ongcDays * Number(rate))
   }
 
   // Required headcount per installation = sum of its designation requirements.
