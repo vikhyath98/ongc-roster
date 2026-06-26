@@ -138,6 +138,12 @@ export default function EmployeeDetail({
             )}
           </span>
         </div>
+        {employee.alternate_phone && (
+          <div>
+            <span className="detail-meta__label">Alt phone</span>
+            <span className="detail-meta__value">{employee.alternate_phone}</span>
+          </div>
+        )}
         <div>
           <span className="detail-meta__label">Location</span>
           <span className="detail-meta__value">

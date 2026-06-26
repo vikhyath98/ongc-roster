@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 // Columns we always pull for an employee, with the joined designation and
 // (if any) current installation for display.
 const SELECT =
-  'id,emp_id,full_name,phone,employment_status,notes,designation_id,current_installation_id,' +
+  'id,emp_id,full_name,phone,alternate_phone,employment_status,notes,designation_id,current_installation_id,' +
   'base_location_type,recall_lead_time_days,nedp_number,nedp_valid_until,photo_path,' +
   'designation:designations(id,name,category:categories(id,name)),' +
   'installation:installations(id,name,type)'
@@ -124,6 +124,7 @@ function toRow(input) {
     full_name: input.full_name?.trim(),
     designation_id: input.designation_id || null,
     phone: input.phone?.trim() || null,
+    alternate_phone: input.alternate_phone?.trim() || null,
     employment_status: input.employment_status || 'active',
     notes: input.notes?.trim() || null,
     base_location_type: input.base_location_type || null,

@@ -46,7 +46,7 @@ export async function listOnBaseEmployees() {
   return supabase
     .from('employees')
     .select(
-      'id,emp_id,full_name,phone,designation_id,employment_status,current_installation_id,' +
+      'id,emp_id,full_name,phone,alternate_phone,designation_id,employment_status,current_installation_id,' +
         'base_location_type,recall_lead_time_days,nedp_number,nedp_valid_until,' +
         'designation:designations(id,name,category:categories(name))'
     )

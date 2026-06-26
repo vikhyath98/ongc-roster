@@ -12,6 +12,7 @@ const EMPTY = {
   full_name: '',
   designation_id: '',
   phone: '',
+  alternate_phone: '',
   employment_status: 'active',
   notes: '',
   base_location_type: '', // '' = not specified → null on save
@@ -59,6 +60,7 @@ export default function EmployeeForm({
             full_name: employee.full_name ?? '',
             designation_id: employee.designation_id ?? '',
             phone: employee.phone ?? '',
+            alternate_phone: employee.alternate_phone ?? '',
             employment_status: employee.employment_status ?? 'active',
             notes: employee.notes ?? '',
             base_location_type: employee.base_location_type ?? '',
@@ -251,6 +253,11 @@ export default function EmployeeForm({
         <label className="field">
           <span>Phone</span>
           <input value={form.phone} onChange={set('phone')} inputMode="tel" />
+        </label>
+
+        <label className="field">
+          <span>Alternate phone (optional)</span>
+          <input value={form.alternate_phone} onChange={set('alternate_phone')} inputMode="tel" />
         </label>
 
         {/* Location */}

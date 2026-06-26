@@ -2389,3 +2389,20 @@ code {
   color: #a4231a;
   align-self: center;
 }
+
+/* Native-dialler shortcut on candidate cards (§ alternate phone). */
+.dialler {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+.dialler__select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 0.82rem;
+}

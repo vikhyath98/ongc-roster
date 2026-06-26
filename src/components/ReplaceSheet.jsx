@@ -79,6 +79,11 @@ export default function ReplaceSheet({
   const [historyRows, setHistoryRows] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
+  // Native-dialler shortcut: which number is selected per candidate card
+  // ('primary' | 'alternate'). Default primary. Separate from the Model A
+  // "Call…" log button — this only opens the phone dialler.
+  const [dialSel, setDialSel] = useState({}) // candidateId -> 'primary' | 'alternate'
+
   // Reset all inline UI whenever the sheet targets a different stint.
   useEffect(() => {
     setManifestForId(null)
@@ -352,6 +357,42 @@ export default function ReplaceSheet({
     )
   }
 
+  // Native-dialler shortcut row. A dropdown (only when an alternate exists) plus
+  // a 📞 Call tel: link. This does NOT log a call — that's the separate "Call…"
+  // (Model A) button.
+  const diallerRow = (c) => {
+    const primary = c.phone
+    const alt = c.alternate_phone
+    if (!primary && !alt) return null
+    const sel = dialSel[c.id] ?? 'primary'
+    const selectedNumber = sel === 'alternate' && alt ? alt : primary || alt
+    if (!alt || !primary) {
+      // Only one number on file — a single Call button, no dropdown.
+      return (
+        <div className="dialler">
+          <a className="btn btn--ghost btn--sm" href={`tel:${selectedNumber}`}>
+            📞 Call
+          </a>
+        </div>
+      )
+    }
+    return (
+      <div className="dialler">
+        <select
+          className="dialler__select"
+          value={sel}
+          onChange={(e) => setDialSel((s) => ({ ...s, [c.id]: e.target.value }))}
+        >
+          <option value="primary">Primary: {primary}</option>
+          <option value="alternate">Alternate: {alt}</option>
+        </select>
+        <a className="btn btn--ghost btn--sm" href={`tel:${selectedNumber}`}>
+          📞 Call
+        </a>
+      </div>
+    )
+  }
+
   return (
     <Modal open={open} title="Find replacement" onClose={onClose}>
       <div className={`target-card ${targetState?.cls ?? ''}`}>
@@ -408,6 +449,7 @@ export default function ReplaceSheet({
                       {callSummary(c.availability)}
                       {exp ? ` · valid until ${exp}` : ''}
                     </div>
+                    {diallerRow(c)}
                     <div className="cand-card__actions">{manifestBtn(c)}</div>
                     {manifestPanel(c)}
                     {historyToggle(c)}
@@ -451,6 +493,7 @@ export default function ReplaceSheet({
                     {callSummary(c.availability)}
                     {dim && ' · repeated no-answer'}
                   </div>
+                  {diallerRow(c)}
                   <div className="cand-card__actions">
                     <button
                       type="button"
