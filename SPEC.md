@@ -399,7 +399,7 @@ B was built before C–H because it consumes the pairing data A produces, and wa
 
 ## 15. Open / unresolved items
 
-- **BLQ-1 / BLQ-2 naming.** The ops team's chopper-field list named "BLQ1, BLQ2" while the seeded installation list has only "BLQ-I". Unconfirmed whether BLQ-2 is a real, not-yet-added installation or a naming variant. Resolve before assuming BLQ-2 exists anywhere in the system.
+- ~~**BLQ-1 / BLQ-2 naming.** The ops team's chopper-field list named "BLQ1, BLQ2" while the seeded installation list has only "BLQ-I". Unconfirmed whether BLQ-2 is a real, not-yet-added installation or a naming variant.~~ **RESOLVED** (owner decision): there is **only BLQ-1** — "BLQ-2" is not a real installation (naming variant). The single BLQ site stays as seeded ("BLQ-I"); no BLQ-2 to add.
 - **Field grouping** (Tapti/B&S/South/North/NH) — parked, not built. A lightweight optional `field` label on installations could be added later purely for analytics/filtering; no logic should depend on it yet.
 - **No-show confirmation snapshot** — reversing a no-show correction does not restore the employee's prior `confirmed` value (it stays `false`); accepted as a minor, low-cost gap rather than adding a snapshot column.
 - ~~**alerts.js Alert-1 wait-day calc** uses `slice(0,10)` on a raw UTC timestamp (same IST/UTC class as `eb17e66`) — only misfires for outcomes recorded midnight–5:30am IST.~~ **RESOLVED** (commit `e6ec1ec`): a `toISTDate` helper shifts the timestamp into IST (+5:30) before taking the date.
